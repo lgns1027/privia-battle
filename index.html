@@ -4,927 +4,793 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>상식퀴즈대전 - 실시간 멀티플레이</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <!-- MQTT.js: 계정 없이 쓸 수 있는 신뢰성 높은 메시지 브로커 라이브러리 -->
+  <script src="https://unpkg.com/mqtt@5.3.4/dist/mqtt.min.js"></script>
   <style>
     :root {
-      --bg: #0f172a; --card: #1e293b; --border: #334155;
-      --focus: #3b82f6; --input-bg: #0f172a;
-      --text: #ffffff; --sub: #94a3b8; --muted: #64748b;
-      --blue: #2563eb; --gold: #f59e0b; --red: #ef4444; --green: #10b981;
+      --bg:#0f172a;--card:#1e293b;--border:#334155;
+      --focus:#3b82f6;--inp:#0f172a;
+      --txt:#fff;--sub:#94a3b8;--muted:#64748b;
+      --blue:#2563eb;--gold:#f59e0b;--red:#ef4444;--green:#10b981;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Noto Sans KR', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; justify-content: center; align-items: center; }
-    #app { width: 100%; max-width: 440px; min-height: 100vh; display: flex; flex-direction: column; background: var(--bg); position: relative; }
-    @media (min-width: 480px) { #app { min-height: 820px; height: 820px; border-radius: 20px; border: 1px solid var(--border); margin: 20px 0; overflow: hidden; box-shadow: 0 25px 60px -10px #000a; } }
-    .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 18px; width: 100%; }
-    input, select { width: 100%; height: 48px; padding: 0 14px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 10px; color: var(--text); font-size: 0.95rem; font-family: inherit; outline: none; }
-    input:focus, select:focus { border-color: var(--focus); }
-    button { height: 48px; padding: 0 18px; border-radius: 10px; border: none; font-size: 0.9rem; font-weight: 700; font-family: inherit; cursor: pointer; color: #fff; background: var(--blue); transition: opacity 0.15s; }
-    button:hover { opacity: 0.85; }
-    button:disabled { opacity: 0.35; cursor: not-allowed; }
-    .btn-gold { background: var(--gold); color: #000; }
-    .btn-red { background: var(--red); }
-    .btn-sub { background: var(--border); color: var(--text); }
-    .avatar { width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: #fff; font-weight: 900; font-size: 1rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-    .chip { padding: 3px 9px; border-radius: 7px; font-size: 0.72rem; font-weight: 800; display: inline-flex; align-items: center; }
-    .chip-host { background:#f59e0b22; color:var(--gold); border:1px solid #f59e0b55; }
-    .chip-ready { background:#10b98122; color:var(--green); border:1px solid #10b98155; }
-    .chip-wait { background:#ef444422; color:var(--red); border:1px solid #ef444455; }
-    .chip-ok { background:#10b98122; color:var(--green); border:1px solid #10b98155; }
-    .chip-err { background:#ef444422; color:var(--red); border:1px solid #ef444455; }
-    .timer-wrap { width:100%; height:7px; background:#fff2; border-radius:4px; overflow:hidden; margin:12px 0; }
-    .timer-fill { height:100%; background:var(--focus); transition:width 0.1s linear, background 0.2s; }
-    .timer-fill.warn { background:var(--red); }
-    .q-box { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:28px 18px; text-align:center; font-size:1.1rem; font-weight:700; line-height:1.6; min-height:140px; display:flex; align-items:center; justify-content:center; margin-bottom:14px; }
-    .bottom-bar { margin-top:auto; padding:14px 18px; background:var(--bg); border-top:1px solid var(--border); }
-    .overlay { position:absolute; top:0; left:0; width:100%; height:100%; background:#0f172aee; backdrop-filter:blur(8px); display:flex; align-items:center; justify-content:center; padding:20px; z-index:100; }
-    .overlay-box { background:var(--card); border:1px solid var(--border); border-radius:16px; width:100%; padding:22px; }
-    .podium-wrap { display:flex; justify-content:center; align-items:flex-end; gap:12px; height:210px; margin:14px 0 20px; }
-    .podium-slot { display:flex; flex-direction:column; align-items:center; flex:1; height:100%; justify-content:flex-end; }
-    .podium-box { width:100%; border-radius:10px 10px 0 0; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:1.4rem; }
-    .podium-slot.r1 .podium-box { height:125px; background:linear-gradient(180deg,#f59e0b,#d97706); color:#000; }
-    .podium-slot.r2 .podium-box { height:88px; background:linear-gradient(180deg,#94a3b8,#475569); color:#fff; }
-    .podium-slot.r3 .podium-box { height:62px; background:linear-gradient(180deg,#b45309,#78350f); color:#fff; }
-    .p-name { font-size:0.85rem; font-weight:800; text-align:center; margin-bottom:2px; }
-    .p-score { font-size:0.78rem; color:var(--sub); margin-bottom:6px; }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;display:flex;justify-content:center;align-items:center}
+    #app{width:100%;max-width:440px;min-height:100vh;display:flex;flex-direction:column;background:var(--bg);position:relative}
+    @media(min-width:480px){#app{min-height:820px;height:820px;border-radius:20px;border:1px solid var(--border);margin:20px 0;overflow:hidden;box-shadow:0 25px 60px -10px #000a}}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;width:100%}
+    input,select{width:100%;height:48px;padding:0 14px;background:var(--inp);border:1px solid var(--border);border-radius:10px;color:var(--txt);font-size:.95rem;font-family:inherit;outline:none}
+    input:focus,select:focus{border-color:var(--focus)}
+    button{height:48px;padding:0 18px;border-radius:10px;border:none;font-size:.9rem;font-weight:700;font-family:inherit;cursor:pointer;color:#fff;background:var(--blue);transition:opacity .15s}
+    button:hover{opacity:.85}
+    button:disabled{opacity:.35;cursor:not-allowed}
+    .btn-gold{background:var(--gold);color:#000}
+    .btn-red{background:var(--red)}
+    .btn-sub{background:var(--border);color:var(--txt)}
+    .avatar{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:#fff;font-weight:900;font-size:1rem;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    .chip{padding:3px 9px;border-radius:7px;font-size:.72rem;font-weight:800;display:inline-flex;align-items:center}
+    .chip-host{background:#f59e0b22;color:var(--gold);border:1px solid #f59e0b55}
+    .chip-ready{background:#10b98122;color:var(--green);border:1px solid #10b98155}
+    .chip-wait{background:#ef444422;color:var(--red);border:1px solid #ef444455}
+    .chip-ok{background:#10b98122;color:var(--green);border:1px solid #10b98155}
+    .chip-err{background:#ef444422;color:var(--red);border:1px solid #ef444455}
+    .timer-wrap{width:100%;height:7px;background:#fff2;border-radius:4px;overflow:hidden;margin:12px 0}
+    .timer-fill{height:100%;background:var(--focus);transition:width .1s linear,background .2s}
+    .timer-fill.warn{background:var(--red)}
+    .q-box{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:28px 18px;text-align:center;font-size:1.1rem;font-weight:700;line-height:1.6;min-height:140px;display:flex;align-items:center;justify-content:center;margin-bottom:14px}
+    .bottom-bar{margin-top:auto;padding:14px 18px;background:var(--bg);border-top:1px solid var(--border)}
+    .overlay{position:absolute;top:0;left:0;width:100%;height:100%;background:#0f172aee;backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;padding:20px;z-index:100}
+    .overlay-box{background:var(--card);border:1px solid var(--border);border-radius:16px;width:100%;padding:22px}
+    .podium-wrap{display:flex;justify-content:center;align-items:flex-end;gap:12px;height:210px;margin:14px 0 20px}
+    .podium-slot{display:flex;flex-direction:column;align-items:center;flex:1;height:100%;justify-content:flex-end}
+    .podium-box{width:100%;border-radius:10px 10px 0 0;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:1.4rem}
+    .podium-slot.r1 .podium-box{height:125px;background:linear-gradient(180deg,#f59e0b,#d97706);color:#000}
+    .podium-slot.r2 .podium-box{height:88px;background:linear-gradient(180deg,#94a3b8,#475569);color:#fff}
+    .podium-slot.r3 .podium-box{height:62px;background:linear-gradient(180deg,#b45309,#78350f);color:#fff}
+    .p-name{font-size:.85rem;font-weight:800;text-align:center;margin-bottom:2px}
+    .p-score{font-size:.78rem;color:var(--sub);margin-bottom:6px}
 
-    /* 연결 상태 표시 */
-    #net-badge {
-      position: fixed; bottom: 14px; right: 14px;
-      padding: 4px 10px; border-radius: 8px; font-size: 0.72rem; font-weight: 800;
-      background: #ef444422; color: var(--red); border: 1px solid #ef444455;
-      z-index: 999; transition: all 0.3s;
-    }
-    #net-badge.ok { background: #10b98122; color: var(--green); border-color: #10b98155; }
+    /* 연결 상태 뱃지 */
+    #net-status{position:fixed;bottom:12px;right:12px;padding:4px 10px;border-radius:8px;font-size:.72rem;font-weight:800;z-index:999;transition:all .3s;background:#ef444422;color:var(--red);border:1px solid #ef444455}
+    #net-status.ok{background:#10b98122;color:var(--green);border-color:#10b98155}
+    #net-status.warn{background:#f59e0b22;color:var(--gold);border-color:#f59e0b55}
   </style>
 </head>
 <body>
 <div id="app"></div>
-<div id="net-badge">● 연결 중...</div>
+<div id="net-status">● 연결 중...</div>
 
 <script>
-(function() {
-  "use strict";
+(function(){
+"use strict";
 
-  // ── 식별자 ────────────────────────────────────────────────
-  if (!window.name || !window.name.startsWith("tq_"))
-    window.name = "tq_" + Math.random().toString(36).substr(2, 8) + "_" + Date.now();
-  var MY_ID = "p_" + window.name;
+// ──────────────────────────────────────────────────────────
+//  식별자
+// ──────────────────────────────────────────────────────────
+if(!window.name||!window.name.startsWith("tq_"))
+  window.name="tq_"+Math.random().toString(36).substr(2,8)+"_"+Date.now();
+var MY_ID="p_"+window.name;
 
-  // PieSocket 무료 채널 (채널명을 고정, 모든 클라이언트가 같은 채널 공유)
-  var WS_URL = "wss://free.piesocket.com/v3/quiz_battle_2025_v1?api_key=VCXScKGBs8mMVQqEizqDYrKPvdM82fQQFiGAKebn&notify_self=1";
+// ──────────────────────────────────────────────────────────
+//  MQTT 설정
+//  HiveMQ 공개 브로커: 무료, 계정 불필요, 전 세계 모든 기기에서 통신 가능
+//  retain=true 옵션: 새로 접속하는 클라이언트도 즉시 최신 방 목록을 받음
+// ──────────────────────────────────────────────────────────
+var BROKER = "wss://broker.hivemq.com:8884/mqtt";
+var TOPIC_ROOMS  = "tqbattle/v1/rooms";          // 방 목록 (retain)
+var TOPIC_ROOM   = "tqbattle/v1/room/";          // 방별 이벤트 (prefix)
 
-  // ── 네트워크 ──────────────────────────────────────────────
-  var msgHandlers = new Set();
-  var ws = null;
-  var bc = null;
-  var pingTimer = null;
-  var roomBcastTimer = null;   // ★ 방 목록 주기적 브로드캐스트
-  var reqRetryTimer = null;    // ★ REQ_ROOM_LIST 재시도
-  var netBadge = document.getElementById("net-badge");
+var mqttClient = null;
+var mqttReady  = false;
+var subTopics  = new Set();
+var msgQueue   = [];           // 연결 전 보내려던 메시지 버퍼
+var netBadge   = document.getElementById("net-status");
 
-  function initNet(handler) {
-    if (handler) msgHandlers.add(handler);
-    // BroadcastChannel: 같은 브라우저 여러 탭 동기화용
-    if (!bc && typeof BroadcastChannel !== "undefined") {
-      try {
-        bc = new BroadcastChannel("TQ_BC_2025");
-        bc.onmessage = function(e) { if (e && e.data) onMsg(e.data); };
-      } catch(err) {}
-    }
-    connectWS();
-    return function() { if (handler) msgHandlers.delete(handler); };
-  }
-
-  function connectWS() {
-    try {
-      if (ws) { try { ws.close(); } catch(e) {} }
-      ws = new WebSocket(WS_URL);
-      ws.onopen = function() {
-        setNetStatus(true);
-        // 핑 유지
-        if (pingTimer) clearInterval(pingTimer);
-        pingTimer = setInterval(function() {
-          if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: "PING", sid: MY_ID }));
-        }, 8000);
-        // ★ 접속 즉시 방 목록 요청, 그리고 재시도 2회
-        send("REQ_ROOM_LIST", {});
-        var retries = 0;
-        if (reqRetryTimer) clearInterval(reqRetryTimer);
-        reqRetryTimer = setInterval(function() {
-          retries++;
-          send("REQ_ROOM_LIST", {});
-          if (retries >= 3) { clearInterval(reqRetryTimer); reqRetryTimer = null; }
-        }, 1500);
-      };
-      ws.onmessage = function(e) {
-        try {
-          var msg = JSON.parse(e.data);
-          if (msg && msg.type && msg.type !== "PING") onMsg(msg);
-        } catch(err) {}
-      };
-      ws.onclose = function() {
-        setNetStatus(false);
-        if (pingTimer) clearInterval(pingTimer);
-        setTimeout(connectWS, 2500);
-      };
-      ws.onerror = function() { setNetStatus(false); };
-    } catch(err) { setNetStatus(false); setTimeout(connectWS, 3000); }
-  }
-
-  function setNetStatus(ok) {
-    if (netBadge) {
-      netBadge.textContent = ok ? "● 연결됨" : "● 연결 중...";
-      netBadge.className = ok ? "ok" : "";
-    }
-  }
-
-  // ★ 방 목록 주기 브로드캐스트 시작/중지
-  function startRoomBcast() {
-    if (roomBcastTimer) return;
-    roomBcastTimer = setInterval(function() {
-      var list = getRooms();
-      if (list.length > 0) {
-        send("ROOM_LIST_UPDATE", { rooms: list });
-      }
-    }, 4000); // 4초마다 방 목록 전송
-  }
-  function stopRoomBcast() {
-    if (roomBcastTimer) { clearInterval(roomBcastTimer); roomBcastTimer = null; }
-  }
-
-  function send(type, payload) {
-    var msg = { type: type, payload: payload || {}, sid: MY_ID, ts: Date.now() };
-    // BroadcastChannel (같은 브라우저 내 탭)
-    if (bc) { try { bc.postMessage(msg); } catch(err) {} }
-    // WebSocket (다른 브라우저/기기)
-    if (ws && ws.readyState === 1) {
-      try { ws.send(JSON.stringify(msg)); } catch(err) {}
-    }
-  }
-
-  function onMsg(msg) {
-    msgHandlers.forEach(function(h) { try { h(msg); } catch(err) {} });
-  }
-
-  // ── 방 상태 (인메모리 Map) ────────────────────────────────
-  var rooms = new Map();
-
-  function getRooms() {
-    return Array.from(rooms.values()).filter(function(r) {
-      return r && Array.isArray(r.players) && r.players.length > 0;
-    });
-  }
-  function setRooms(list) {
-    rooms.clear();
-    if (!Array.isArray(list)) return;
-    list.forEach(function(r) {
-      if (r && r.id && Array.isArray(r.players) && r.players.length > 0)
-        rooms.set(r.id, r);
-    });
-  }
-  function upsertRoom(r) {
-    if (!r || !r.id) return;
-    if (!r.players || r.players.length === 0) rooms.delete(r.id);
-    else rooms.set(r.id, r);
-  }
-
-  function createRoom(opts) {
-    // 기존에 내가 있던 방 정리
-    rooms.forEach(function(r, id) {
-      r.players = r.players.filter(function(p) { return p.id !== MY_ID; });
-      if (r.players.length === 0) rooms.delete(id);
-    });
-    var room = {
-      id: "rm_" + Math.random().toString(36).substr(2, 7),
-      title: opts.title || opts.hostNickname + "님의 방",
-      category: opts.category || "all",
-      maxPlayers: Number(opts.maxPlayers) || 4,
-      hostId: MY_ID,
-      status: "waiting",
-      players: [{
-        id: MY_ID, nickname: opts.hostNickname,
-        avatar: opts.hostNickname[0].toUpperCase(),
-        isHost: true, isReady: true, score: 0, totalTime: 0
-      }],
-      quizSet: [], qIdx: 0, startTime: 0, subs: {}
-    };
-    rooms.set(room.id, room);
-    // ★ 방 만들자마자 즉시 + 주기적으로 브로드캐스트
-    send("ROOM_LIST_UPDATE", { rooms: getRooms() });
-    startRoomBcast();
-    return room;
-  }
-
-  function joinRoom(roomId, player) {
-    var room = rooms.get(roomId);
-    if (!room) return null;
-    if (!room.players.find(function(p) { return p.id === player.id; })) {
-      if (room.players.length >= room.maxPlayers) { alert("방이 가득 찼습니다."); return null; }
-      room.players.push({
-        id: player.id, nickname: player.nickname,
-        avatar: player.nickname[0].toUpperCase(),
-        isHost: false, isReady: false, score: 0, totalTime: 0
-      });
-    }
-    rooms.set(room.id, room);
-    send("ROOM_STATE_UPDATE", { room: room });
-    send("ROOM_LIST_UPDATE", { rooms: getRooms() });
-    return room;
-  }
-
-  function toggleReady(roomId, playerId) {
-    var room = rooms.get(roomId);
-    if (!room) return;
-    var p = room.players.find(function(p) { return p.id === playerId; });
-    if (p && !p.isHost) {
-      p.isReady = !p.isReady;
-      rooms.set(room.id, room);
-      send("ROOM_STATE_UPDATE", { room: room });
-    }
-  }
-
-  function leaveRoom(roomId, playerId) {
-    var room = rooms.get(roomId);
-    if (!room) return;
-    var wasHost = room.hostId === playerId;
-    room.players = room.players.filter(function(p) { return p.id !== playerId; });
-    if (room.players.length === 0) {
-      rooms.delete(roomId);
-      stopRoomBcast();
-    } else {
-      if (wasHost) {
-        room.players[0].isHost = true;
-        room.players[0].isReady = true;
-        room.hostId = room.players[0].id;
-        send("HOST_CHANGED", { roomId: roomId, newHostId: room.hostId });
-      }
-      rooms.set(roomId, room);
-    }
-    send("ROOM_STATE_UPDATE", { room: room });
-    send("ROOM_LIST_UPDATE", { rooms: getRooms() });
-  }
-
-  window.addEventListener("beforeunload", function() {
-    if (curRoomId) leaveRoom(curRoomId, MY_ID);
+function initMQTT(onMsg) {
+  var clientId = "tqb_" + Math.random().toString(36).substr(2,10);
+  mqttClient = mqtt.connect(BROKER, {
+    clientId   : clientId,
+    clean      : true,
+    keepalive  : 30,
+    reconnectPeriod: 2000,
+    connectTimeout : 10000
   });
 
-  // ── 퀴즈 DB ──────────────────────────────────────────────
-  var QDB = [
-    {id:"q01",sc:1,cat:"history",q:"조선시대 제4대 국왕이자 훈민정음을 창제한 왕은?",a:["세종대왕","세종"],hint:"만원권 지폐"},
-    {id:"q02",sc:1,cat:"science",q:"원소 기호 Au에 해당하는 귀금속은?",a:["금","gold"],hint:"24k"},
-    {id:"q03",sc:1,cat:"geography",q:"세계에서 면적이 가장 넓은 나라는?",a:["러시아","russia"],hint:"유라시아 북쪽"},
-    {id:"q04",sc:1,cat:"science",q:"지구 대기 성분 중 약 78%를 차지하는 기체는?",a:["질소","nitrogen"],hint:"과자 봉지에 충전"},
-    {id:"q05",sc:1,cat:"history",q:"1592년 이순신 장군이 한산도 대첩에서 쓴 진법은?",a:["학익진","학익진법"],hint:"학이 날개를 펼친 모양"},
-    {id:"q06",sc:1,cat:"sports",q:"올림픽 오륜기 5개 고리가 상징하는 것은?",a:["5대륙","오대륙"],hint:"세계의 대륙들"},
-    {id:"q07",sc:1,cat:"culture",q:"판도라 상자 맨 밑에 마지막으로 남은 것은?",a:["희망","hope"],hint:"그리스 신화"},
-    {id:"q08",sc:1,cat:"science",q:"물질의 고체, 기체가 아닌 세 번째 기본 상태는?",a:["액체","liquid"],hint:"물과 같은 상태"},
-    {id:"q09",sc:1,cat:"geography",q:"아프리카를 관류하는 세계에서 가장 긴 강은?",a:["나일강","나일 강","nile"],hint:"이집트 문명"},
-    {id:"q10",sc:1,cat:"economy",q:"물가가 지속적으로 상승하는 경제 현상은?",a:["인플레이션","inflation"],hint:"디플레이션 반대"},
-    {id:"q11",sc:1,cat:"history",q:"신라 청소년 수련단체로 세속오계를 지킨 조직은?",a:["화랑도","화랑"],hint:"김유신이 속한 단체"},
-    {id:"q12",sc:1,cat:"sports",q:"한 선수가 한 경기에 3골 이상 넣는 것은?",a:["해트트릭","햇트릭","hat trick"],hint:"모자 마술에서 유래"},
-    {id:"q13",sc:1,cat:"science",q:"혈액 순환 펌프 역할을 하는 신체 기관은?",a:["심장","heart"],hint:"가슴 왼쪽"},
-    {id:"q14",sc:1,cat:"culture",q:"셰익스피어 '사느냐 죽느냐'로 유명한 작품은?",a:["햄릿","hamlet"],hint:"덴마크 왕자"},
-    {id:"q15",sc:1,cat:"history",q:"임시정부 수장이자 한인애국단을 만든 독립운동가는?",a:["김구","백범 김구"],hint:"호는 백범"},
-    {id:"q16",sc:1,cat:"geography",q:"남아메리카에서 면적이 가장 넓은 나라는?",a:["브라질","brazil"],hint:"삼바와 축구"},
-    {id:"q17",sc:1,cat:"science",q:"식물이 빛 에너지로 유기물을 합성하는 과정은?",a:["광합성","photosynthesis"],hint:"엽록체에서 발생"},
-    {id:"q18",sc:1,cat:"economy",q:"주식 상승장 Bull의 반대, 하락장을 뜻하는 동물은?",a:["곰","bear"],hint:"웅담"},
-    {id:"q19",sc:1,cat:"science",q:"컴퓨터 중앙처리장치 영문 약자 3글자는?",a:["CPU","cpu"],hint:"Central Processing Unit"},
-    {id:"q20",sc:1,cat:"geography",q:"로마 제국의 수도이자 이탈리아 수도는?",a:["로마","rome"],hint:"콜로세움"},
-    {id:"q21",sc:1,cat:"culture",q:"고흐의 소용돌이 밤하늘 명화 제목은?",a:["별이 빛나는 밤","별이빛나는밤"],hint:"뉴욕 현대미술관"},
-    {id:"q22",sc:1,cat:"science",q:"태양계에서 가장 큰 행성은?",a:["목성","jupiter"],hint:"대적점"},
-    {id:"q23",sc:1,cat:"history",q:"목민심서를 쓴 조선 후기 실학자는?",a:["정약용","다산 정약용"],hint:"호는 다산"},
-    {id:"q24",sc:1,cat:"sports",q:"테니스 40대 40 동점 상황 명칭은?",a:["듀스","deuce"],hint:"2점 차로 승리"},
-    {id:"q25",sc:1,cat:"culture",q:"어린 왕자를 쓴 프랑스 작가 겸 비행사는?",a:["생텍쥐페리"],hint:"야간 비행 저자"},
-    {id:"q26",sc:1,cat:"science",q:"이산화탄소의 화학식은?",a:["CO2","co2"],hint:"탄소 1 산소 2"},
-    {id:"q27",sc:1,cat:"geography",q:"대한민국에서 가장 넓은 섬은?",a:["제주도","제주"],hint:"한라산"},
-    {id:"q28",sc:1,cat:"economy",q:"국내총생산 영문 약자 3글자는?",a:["GDP","gdp"],hint:"Gross Domestic Product"},
-    {id:"q29",sc:1,cat:"science",q:"지구에서 가장 가까운 항성은?",a:["태양","sun"],hint:"빛과 에너지의 원천"},
-    {id:"q30",sc:1,cat:"history",q:"발해를 건국한 고구려 장수 출신 인물은?",a:["대조영"],hint:"동모산 인근 건국"},
-    {id:"q31",sc:1,cat:"geography",q:"호주의 행정 수도 도시는?",a:["캔버라","canberra"],hint:"시드니-멜버른 사이"},
-    {id:"q32",sc:1,cat:"culture",q:"노트르담의 꼽추 주인공 이름은?",a:["콰지모도","quasimodo"],hint:"성당 종지기"},
-    {id:"q33",sc:1,cat:"science",q:"혈당을 낮추는 췌장 분비 호르몬은?",a:["인슐린","insulin"],hint:"당뇨병 호르몬"},
-    {id:"q34",sc:1,cat:"sports",q:"볼링에서 핀 10개를 첫 투구에 모두 넘어뜨리는 것은?",a:["스트라이크","strike"],hint:"X 표기"},
-    {id:"q35",sc:1,cat:"history",q:"강감찬이 거란 10만 대군을 대파한 전투는?",a:["귀주대첩","귀주 대첩"],hint:"고려 3대 대첩"},
-    {id:"q36",sc:1,cat:"science",q:"빛의 속도는 진공에서 초당 약 몇 만 km?",a:["30만km","30만","300000"],hint:"지구를 1초에 7.5바퀴"},
-    {id:"q37",sc:1,cat:"culture",q:"헤밍웨이 '노인과 ( ? )' 빈칸은?",a:["바다","sea"],hint:"청새치와의 사투"},
-    {id:"q38",sc:1,cat:"geography",q:"머라이언 동상이 유명한 동남아 도시국가는?",a:["싱가포르","singapore"],hint:"아시아 금융 도시"},
-    {id:"q39",sc:1,cat:"history",q:"이성계가 도읍으로 삼은 한양의 현재 도시명은?",a:["서울","seoul"],hint:"대한민국의 수도"},
-    {id:"q40",sc:1,cat:"economy",q:"소비자 물가 지수 영문 약자 3글자는?",a:["CPI","cpi"],hint:"Consumer Price Index"},
-    // 2점 골든벨
-    {id:"g01",sc:2,cat:"science",q:"💡[골든벨] 빛이 1년간 이동하는 거리 천문 단위는?",a:["광년","light year","lightyear"],hint:"약 9조 4600억 km"},
-    {id:"g02",sc:2,cat:"history",q:"💡[골든벨] 1919년 임시정부 최초 수립 중국 도시는?",a:["상하이","상해","shanghai"],hint:"중국 동부 최대 경제도시"},
-    {id:"g03",sc:2,cat:"science",q:"💡[골든벨] 아인슈타인 질량-에너지 등가 방정식은?",a:["E=mc^2","E=mc2","e=mc2"],hint:"E, m, c 방정식"},
-    {id:"g04",sc:2,cat:"geography",q:"💡[골든벨] 지구상 가장 깊은 해구(약 11000m)는?",a:["마리아나 해구","마리아나해구"],hint:"태평양 북서부"},
-    {id:"g05",sc:2,cat:"economy",q:"💡[골든벨] 중앙은행이 통화를 직접 공급하는 정책은?",a:["양적완화","양적 완화","QE"],hint:"Quantitative Easing"},
-    {id:"g06",sc:2,cat:"history",q:"💡[골든벨] 동서양 무역 교역로 '비단길' 영문은?",a:["실크로드","실크 로드","silk road"],hint:"Silk Road"},
-    {id:"g07",sc:2,cat:"science",q:"💡[골든벨] 페니실린을 발견한 영국 과학자는?",a:["플레밍","알렉산더 플레밍"],hint:"노벨 생리의학상"},
-    {id:"g08",sc:2,cat:"history",q:"💡[골든벨] 1215년 영국 국왕 존이 승인한 대헌장은?",a:["마그나카르타","마그나 카르타"],hint:"Magna Carta"},
-    {id:"g09",sc:2,cat:"geography",q:"💡[골든벨] 지구상 가장 높은 산은?",a:["에베레스트","에베레스트산","everest"],hint:"히말라야 산맥"},
-    {id:"g10",sc:2,cat:"culture",q:"💡[골든벨] 조선 왕과 왕비 신위를 모시는 유네스코 유산은?",a:["종묘","jongmyo"],hint:"종묘제례악"}
-  ];
+  mqttClient.on("connect", function() {
+    mqttReady = true;
+    setNet("ok","● 연결됨");
 
-  function normalize(s) {
-    if (!s) return "";
-    return String(s).toLowerCase().trim()
-      .replace(/\s+/g, "").replace(/[.,!?]/g, "")
-      .replace(/킬로미터/g, "km").replace(/개$/, "").replace(/점$/, "");
+    // 방 목록 토픽 구독 (retain 포함: 접속 즉시 최신 방 목록 수신)
+    mqttSub(TOPIC_ROOMS);
+
+    // 버퍼된 메시지 플러시
+    msgQueue.forEach(function(m){ mqttPub(m.topic,m.payload,m.retain); });
+    msgQueue = [];
+  });
+
+  mqttClient.on("reconnect", function(){ setNet("warn","● 재연결 중..."); });
+  mqttClient.on("offline",   function(){ setNet("","● 오프라인"); mqttReady=false; });
+  mqttClient.on("error",     function(e){ console.warn("MQTT err",e); });
+
+  mqttClient.on("message", function(topic, buf) {
+    try {
+      var msg = JSON.parse(buf.toString());
+      if(msg && msg.sid !== MY_ID) onMsg(msg, topic);   // 내 메시지 제외
+      else if(msg && msg.sid === MY_ID && msg._loopback) onMsg(msg, topic); // loopback 허용된 것만
+    } catch(e) {}
+  });
+}
+
+function mqttSub(topic) {
+  if(subTopics.has(topic)) return;
+  subTopics.add(topic);
+  if(mqttReady) mqttClient.subscribe(topic, {qos:1});
+  else mqttClient.once("connect", function(){ mqttClient.subscribe(topic, {qos:1}); });
+}
+
+function mqttPub(topic, payload, retain) {
+  var buf = JSON.stringify(Object.assign({}, payload, {sid: MY_ID, ts: Date.now()}));
+  if(!mqttReady) { msgQueue.push({topic:topic,payload:payload,retain:!!retain}); return; }
+  mqttClient.publish(topic, buf, {qos:1, retain:!!retain});
+}
+
+function setNet(cls, txt) {
+  netBadge.className = cls;
+  netBadge.textContent = txt;
+}
+
+// ──────────────────────────────────────────────────────────
+//  방 상태 (인메모리)
+// ──────────────────────────────────────────────────────────
+var rooms = new Map();
+
+function getRooms() {
+  return Array.from(rooms.values()).filter(function(r){
+    return r && Array.isArray(r.players) && r.players.length > 0;
+  });
+}
+function mergeRooms(list) {
+  if(!Array.isArray(list)) return;
+  list.forEach(function(r){
+    if(!r||!r.id) return;
+    var existing = rooms.get(r.id);
+    // 내가 호스트인 방은 외부 데이터로 덮어쓰지 않음
+    if(existing && existing.hostId === MY_ID) return;
+    if(r.players && r.players.length > 0) rooms.set(r.id, r);
+    else rooms.delete(r.id);
+  });
+}
+function upsertRoom(r) {
+  if(!r||!r.id) return;
+  if(!r.players||r.players.length===0) rooms.delete(r.id);
+  else rooms.set(r.id, r);
+}
+
+function publishRoomList() {
+  // retain=true: 나중에 접속하는 기기도 즉시 방 목록을 받음
+  mqttPub(TOPIC_ROOMS, {type:"ROOM_LIST_UPDATE", rooms: getRooms()}, true);
+}
+
+// 방 생성/수정 시 방별 토픽 구독
+function subRoomTopic(roomId) {
+  mqttSub(TOPIC_ROOM + roomId);
+}
+function pubRoom(roomId, type, payload) {
+  mqttPub(TOPIC_ROOM + roomId, Object.assign({type:type}, payload), false);
+}
+
+// 방 CRUD
+function createRoom(opts) {
+  // 기존 내 방 정리
+  rooms.forEach(function(r,id){
+    r.players = r.players.filter(function(p){return p.id!==MY_ID;});
+    if(r.players.length===0) rooms.delete(id);
+  });
+  var room = {
+    id       : "rm_"+Math.random().toString(36).substr(2,7),
+    title    : opts.title || opts.hostNickname+"님의 방",
+    category : opts.category || "all",
+    maxPlayers: Number(opts.maxPlayers)||4,
+    hostId   : MY_ID,
+    status   : "waiting",
+    players  : [{id:MY_ID,nickname:opts.hostNickname,avatar:opts.hostNickname[0].toUpperCase(),isHost:true,isReady:true,score:0,totalTime:0}],
+    quizSet:[],qIdx:0,startTime:0,subs:{}
+  };
+  rooms.set(room.id, room);
+  subRoomTopic(room.id);
+  publishRoomList();
+  return room;
+}
+
+function joinRoom(roomId, player) {
+  var room = rooms.get(roomId);
+  if(!room) return null;
+  if(!room.players.find(function(p){return p.id===player.id;})) {
+    if(room.players.length>=room.maxPlayers){alert("방이 가득 찼습니다.");return null;}
+    room.players.push({id:player.id,nickname:player.nickname,avatar:player.nickname[0].toUpperCase(),isHost:false,isReady:false,score:0,totalTime:0});
   }
+  rooms.set(room.id,room);
+  subRoomTopic(room.id);
+  pubRoom(room.id,"ROOM_STATE_UPDATE",{room:room});
+  publishRoomList();
+  return room;
+}
 
-  function checkAnswer(userAns, correctList) {
-    if (!userAns || !Array.isArray(correctList)) return false;
-    var u = normalize(userAns);
-    if (!u) return false;
-    return correctList.some(function(a) {
-      var c = normalize(a);
-      if (c === u) return true;
-      var un = u.replace(/[^0-9.]/g, ""), cn = c.replace(/[^0-9.]/g, "");
-      return un && cn && un === cn;
-    });
+function toggleReady(roomId, playerId) {
+  var room=rooms.get(roomId); if(!room) return;
+  var p=room.players.find(function(p){return p.id===playerId;});
+  if(p&&!p.isHost){
+    p.isReady=!p.isReady;
+    rooms.set(room.id,room);
+    pubRoom(room.id,"ROOM_STATE_UPDATE",{room:room});
   }
+}
 
-  function shuffle(arr) {
-    var a = arr.slice();
-    for (var i = a.length - 1; i > 0; i--) {
-      var j = Math.floor(Math.random() * (i + 1));
-      var tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+function leaveRoom(roomId, playerId) {
+  var room=rooms.get(roomId); if(!room) return;
+  var wasHost=room.hostId===playerId;
+  room.players=room.players.filter(function(p){return p.id!==playerId;});
+  if(room.players.length===0){
+    rooms.delete(roomId);
+    // retain 삭제: 빈 방 정보 지우기 (빈 payload로 retain 덮어씀)
+    mqttPub(TOPIC_ROOMS,{type:"ROOM_LIST_UPDATE",rooms:getRooms()},true);
+  } else {
+    if(wasHost){
+      room.players[0].isHost=true;
+      room.players[0].isReady=true;
+      room.hostId=room.players[0].id;
+      pubRoom(roomId,"HOST_CHANGED",{newHostId:room.hostId,room:room});
     }
-    return a;
+    rooms.set(roomId,room);
+    publishRoomList();
+    pubRoom(roomId,"ROOM_STATE_UPDATE",{room:room});
   }
+}
 
-  function buildQuizSet(category) {
-    var ones = QDB.filter(function(q) { return q.sc === 1; });
-    var twos = QDB.filter(function(q) { return q.sc === 2; });
-    if (category !== "all") {
-      var f = ones.filter(function(q) { return q.cat === category; });
-      if (f.length >= 9) ones = f;
-    }
-    return shuffle(ones).slice(0, 9).concat(shuffle(twos).slice(0, 1));
-  }
+window.addEventListener("beforeunload",function(){
+  if(curRoomId) leaveRoom(curRoomId,MY_ID);
+});
 
-  function catLabel(c) {
-    return { all:"전체", history:"역사", science:"과학", sports:"스포츠", economy:"경제", culture:"문화", geography:"지리" }[c] || c;
-  }
+// ──────────────────────────────────────────────────────────
+//  퀴즈 DB
+// ──────────────────────────────────────────────────────────
+var QDB=[
+  {id:"q01",sc:1,cat:"history",q:"조선시대 제4대 국왕이자 훈민정음을 창제한 왕은?",a:["세종대왕","세종"]},
+  {id:"q02",sc:1,cat:"science",q:"원소 기호 Au에 해당하는 귀금속은?",a:["금","gold"]},
+  {id:"q03",sc:1,cat:"geo",q:"세계에서 면적이 가장 넓은 나라는?",a:["러시아","russia"]},
+  {id:"q04",sc:1,cat:"science",q:"지구 대기 성분 중 약 78%를 차지하는 기체는?",a:["질소","nitrogen"]},
+  {id:"q05",sc:1,cat:"history",q:"1592년 이순신 장군이 한산도 대첩에서 사용한 진법은?",a:["학익진","학익진법"]},
+  {id:"q06",sc:1,cat:"sports",q:"올림픽 오륜기 5개 고리가 상징하는 것은?",a:["5대륙","오대륙"]},
+  {id:"q07",sc:1,cat:"culture",q:"판도라 상자 맨 밑에 마지막으로 남은 것은?",a:["희망","hope"]},
+  {id:"q08",sc:1,cat:"science",q:"물질의 고체·기체가 아닌 세 번째 기본 상태는?",a:["액체","liquid"]},
+  {id:"q09",sc:1,cat:"geo",q:"아프리카를 관류하는 세계에서 가장 긴 강은?",a:["나일강","나일 강","nile"]},
+  {id:"q10",sc:1,cat:"economy",q:"물가가 지속적으로 상승하는 경제 현상은?",a:["인플레이션","inflation"]},
+  {id:"q11",sc:1,cat:"history",q:"신라 청소년 수련단체로 세속오계를 지킨 조직은?",a:["화랑도","화랑"]},
+  {id:"q12",sc:1,cat:"sports",q:"한 선수가 한 경기에 3골 이상 넣는 것은?",a:["해트트릭","햇트릭","hat trick"]},
+  {id:"q13",sc:1,cat:"science",q:"혈액 순환 펌프 역할을 하는 신체 기관은?",a:["심장","heart"]},
+  {id:"q14",sc:1,cat:"culture",q:"셰익스피어 '사느냐 죽느냐'로 유명한 작품은?",a:["햄릿","hamlet"]},
+  {id:"q15",sc:1,cat:"history",q:"임시정부 수장이자 한인애국단을 만든 독립운동가는?",a:["김구","백범 김구"]},
+  {id:"q16",sc:1,cat:"geo",q:"남아메리카에서 면적이 가장 넓은 나라는?",a:["브라질","brazil"]},
+  {id:"q17",sc:1,cat:"science",q:"식물이 빛 에너지로 유기물을 합성하는 과정은?",a:["광합성","photosynthesis"]},
+  {id:"q18",sc:1,cat:"economy",q:"주식 상승장 Bull의 반대, 하락장을 뜻하는 동물은?",a:["곰","bear"]},
+  {id:"q19",sc:1,cat:"science",q:"컴퓨터 중앙처리장치 영문 약자 3글자는?",a:["CPU","cpu"]},
+  {id:"q20",sc:1,cat:"geo",q:"로마 제국의 수도이자 이탈리아 수도는?",a:["로마","rome"]},
+  {id:"q21",sc:1,cat:"culture",q:"고흐의 소용돌이 밤하늘 명화 제목은?",a:["별이 빛나는 밤","별이빛나는밤"]},
+  {id:"q22",sc:1,cat:"science",q:"태양계에서 가장 큰 행성은?",a:["목성","jupiter"]},
+  {id:"q23",sc:1,cat:"history",q:"목민심서를 쓴 조선 후기 실학자는?",a:["정약용","다산 정약용"]},
+  {id:"q24",sc:1,cat:"sports",q:"테니스 40대 40 동점 상황 명칭은?",a:["듀스","deuce"]},
+  {id:"q25",sc:1,cat:"culture",q:"어린 왕자를 쓴 프랑스 작가 겸 비행사는?",a:["생텍쥐페리"]},
+  {id:"q26",sc:1,cat:"science",q:"이산화탄소의 화학식은?",a:["CO2","co2"]},
+  {id:"q27",sc:1,cat:"geo",q:"대한민국에서 가장 넓은 섬은?",a:["제주도","제주"]},
+  {id:"q28",sc:1,cat:"economy",q:"국내총생산 영문 약자 3글자는?",a:["GDP","gdp"]},
+  {id:"q29",sc:1,cat:"science",q:"지구에서 가장 가까운 항성은?",a:["태양","sun"]},
+  {id:"q30",sc:1,cat:"history",q:"발해를 건국한 고구려 장수 출신 인물은?",a:["대조영"]},
+  {id:"q31",sc:1,cat:"geo",q:"호주의 행정 수도 도시는?",a:["캔버라","canberra"]},
+  {id:"q32",sc:1,cat:"culture",q:"노트르담의 꼽추 주인공 이름은?",a:["콰지모도","quasimodo"]},
+  {id:"q33",sc:1,cat:"science",q:"혈당을 낮추는 췌장 분비 호르몬은?",a:["인슐린","insulin"]},
+  {id:"q34",sc:1,cat:"sports",q:"볼링에서 핀 10개를 첫 투구에 모두 넘어뜨리는 것은?",a:["스트라이크","strike"]},
+  {id:"q35",sc:1,cat:"history",q:"강감찬이 거란 10만 대군을 대파한 전투는?",a:["귀주대첩","귀주 대첩"]},
+  {id:"q36",sc:1,cat:"science",q:"빛의 속도는 진공에서 초당 약 몇 만 km?",a:["30만km","30만","300000"]},
+  {id:"q37",sc:1,cat:"culture",q:"헤밍웨이 '노인과 ( ? )' 빈칸은?",a:["바다","sea"]},
+  {id:"q38",sc:1,cat:"geo",q:"머라이언 동상이 유명한 동남아 도시국가는?",a:["싱가포르","singapore"]},
+  {id:"q39",sc:1,cat:"history",q:"이성계가 도읍으로 삼은 한양의 현재 도시명은?",a:["서울","seoul"]},
+  {id:"q40",sc:1,cat:"economy",q:"소비자 물가 지수 영문 약자 3글자는?",a:["CPI","cpi"]},
+  // 골든벨 2점
+  {id:"g01",sc:2,cat:"science",q:"💡[골든벨] 빛이 1년간 이동하는 거리 천문 단위는?",a:["광년","light year","lightyear"]},
+  {id:"g02",sc:2,cat:"history",q:"💡[골든벨] 1919년 임시정부 최초 수립 중국 도시는?",a:["상하이","상해","shanghai"]},
+  {id:"g03",sc:2,cat:"science",q:"💡[골든벨] 아인슈타인 질량-에너지 등가 방정식은?",a:["E=mc^2","E=mc2","e=mc2"]},
+  {id:"g04",sc:2,cat:"geo",q:"💡[골든벨] 지구상 가장 깊은 해구(약 11000m)는?",a:["마리아나 해구","마리아나해구"]},
+  {id:"g05",sc:2,cat:"economy",q:"💡[골든벨] 중앙은행이 통화를 직접 공급하는 정책은?",a:["양적완화","양적 완화","QE"]},
+  {id:"g06",sc:2,cat:"history",q:"💡[골든벨] 동서양 무역 교역로 비단길 영문은?",a:["실크로드","실크 로드","silk road"]},
+  {id:"g07",sc:2,cat:"science",q:"💡[골든벨] 페니실린을 발견한 영국 과학자는?",a:["플레밍","알렉산더 플레밍"]},
+  {id:"g08",sc:2,cat:"history",q:"💡[골든벨] 1215년 영국 국왕 존이 승인한 대헌장은?",a:["마그나카르타","마그나 카르타"]},
+  {id:"g09",sc:2,cat:"geo",q:"💡[골든벨] 지구상 가장 높은 산은?",a:["에베레스트","에베레스트산","everest"]},
+  {id:"g10",sc:2,cat:"culture",q:"💡[골든벨] 조선 왕과 왕비 신위를 모시는 유네스코 유산은?",a:["종묘","jongmyo"]}
+];
 
-  // ── 앱 상태 ──────────────────────────────────────────────
-  var appState = "LOBBY";
-  var profile = null;
-  var curRoomId = null;
-  var curRoom = null;
-  var qIdx = 0;
-  var timeLeft = 15;
-  var submitted = false;
-  var submittedAns = "";
-  var roundOverlay = null;
-  var timerInterval = null;
-  var resultTimeout = null;
+function norm(s){
+  if(!s) return "";
+  return String(s).toLowerCase().trim()
+    .replace(/\s+/g,"").replace(/[.,!?]/g,"")
+    .replace(/킬로미터/g,"km").replace(/개$/,"").replace(/점$/,"");
+}
+function checkAns(u,list){
+  if(!u||!Array.isArray(list)) return false;
+  var un=norm(u); if(!un) return false;
+  return list.some(function(a){
+    var c=norm(a); if(c===un) return true;
+    var n1=un.replace(/[^0-9.]/g,""),n2=c.replace(/[^0-9.]/g,"");
+    return n1&&n2&&n1===n2;
+  });
+}
+function shuffle(a){
+  var arr=a.slice();
+  for(var i=arr.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=arr[i];arr[i]=arr[j];arr[j]=t;}
+  return arr;
+}
+function buildQuiz(cat){
+  var ones=QDB.filter(function(q){return q.sc===1;});
+  var twos=QDB.filter(function(q){return q.sc===2;});
+  if(cat!=="all"){var f=ones.filter(function(q){return q.cat===cat;});if(f.length>=9)ones=f;}
+  return shuffle(ones).slice(0,9).concat(shuffle(twos).slice(0,1));
+}
+function catLabel(c){return{all:"전체",history:"역사",science:"과학",sports:"스포츠",economy:"경제",culture:"문화",geo:"지리"}[c]||c;}
 
-  var appEl = document.getElementById("app");
-  try { profile = JSON.parse(sessionStorage.getItem("tq_profile")); } catch(e) {}
+// ──────────────────────────────────────────────────────────
+//  앱 상태
+// ──────────────────────────────────────────────────────────
+var appState="LOBBY";
+var profile=null;
+var curRoomId=null;
+var curRoom=null;
+var qIdx=0,timeLeft=15,submitted=false,submittedAns="";
+var roundOverlay=null,timerIv=null,resultTo=null;
+var appEl=document.getElementById("app");
 
-  // ── 렌더 ─────────────────────────────────────────────────
-  function render() {
-    appEl.innerHTML = "";
-    if (!profile || !profile.nickname) { renderNickname(); return; }
-    if (appState === "WAITING" && curRoom) { renderWaiting(); return; }
-    if (appState === "QUIZ" && curRoom) { renderQuiz(); return; }
-    if (appState === "RESULT" && curRoom) { renderResult(); return; }
-    renderLobby();
-  }
+try{profile=JSON.parse(sessionStorage.getItem("tq_p"));}catch(e){}
 
-  // ── 닉네임 ───────────────────────────────────────────────
-  function renderNickname() {
-    var div = mk("div", "flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:24px;");
-    div.innerHTML = [
-      '<div style="width:100%;max-width:320px;text-align:center;">',
-      '<div style="font-size:2.4rem;margin-bottom:6px;">🏆</div>',
-      '<h1 style="font-size:1.6rem;font-weight:900;margin-bottom:6px;">상식퀴즈대전</h1>',
-      '<p style="color:var(--sub);font-size:0.88rem;margin-bottom:28px;">실시간 멀티플레이 퀴즈</p>',
-      '<div class="card" style="padding:24px;">',
-      '<label style="display:block;text-align:left;font-size:0.8rem;font-weight:700;color:var(--sub);margin-bottom:10px;">닉네임을 입력하세요</label>',
-      '<input id="nick-in" type="text" placeholder="최대 8자" maxlength="8" style="margin-bottom:14px;text-align:center;font-size:1rem;letter-spacing:0.05em;">',
-      '<button id="nick-btn" style="width:100%;font-size:1rem;">대전 시작하기 →</button>',
-      '</div></div>'
-    ].join("");
-    appEl.appendChild(div);
-    var inp = document.getElementById("nick-in");
-    var btn = document.getElementById("nick-btn");
-    function go() {
-      var v = inp.value.trim();
-      if (!v) { alert("닉네임을 입력해 주세요."); return; }
-      profile = { nickname: v, avatar: v[0].toUpperCase() };
-      sessionStorage.setItem("tq_profile", JSON.stringify(profile));
-      render();
-    }
-    btn.addEventListener("click", go);
-    inp.addEventListener("keydown", function(e) { if (e.key === "Enter") go(); });
-    inp.focus();
-  }
+// ──────────────────────────────────────────────────────────
+//  렌더
+// ──────────────────────────────────────────────────────────
+function render(){
+  appEl.innerHTML="";
+  if(!profile||!profile.nickname){renderNick();return;}
+  if(appState==="WAITING"&&curRoom){renderWait();return;}
+  if(appState==="QUIZ"&&curRoom){renderQuiz();return;}
+  if(appState==="RESULT"&&curRoom){renderResult();return;}
+  renderLobby();
+}
 
-  // ── 로비 ─────────────────────────────────────────────────
-  function renderLobby() {
-    appState = "LOBBY";
-    var list = getRooms();
-    var div = mk("div", "display:flex;flex-direction:column;height:100%;");
-    div.innerHTML = [
-      // 헤더
-      '<div style="padding:16px 18px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">',
-      '<div>',
-      '<h1 style="font-size:1.2rem;font-weight:900;">상식퀴즈대전</h1>',
-      '<p style="color:var(--sub);font-size:0.76rem;margin-top:2px;">방 참가 또는 직접 개설</p>',
-      '</div>',
-      '<div style="display:flex;align-items:center;gap:8px;">',
-      '<span style="background:var(--card);padding:4px 12px;border-radius:10px;border:1px solid var(--border);font-weight:800;font-size:0.83rem;">' + profile.nickname + '</span>',
-      '</div></div>',
-      // 버튼
-      '<div style="padding:12px 18px;display:flex;gap:10px;">',
-      '<button id="create-btn" class="btn-gold" style="flex:1;">+ 방 만들기</button>',
-      '<button id="quick-btn" style="flex:1;">⚡ 빠른 입장</button>',
-      '</div>',
-      // 방 목록 헤더
-      '<div style="padding:0 18px 8px;font-weight:700;font-size:0.82rem;color:var(--sub);">',
-      '대기 중인 방 (' + list.length + ')',
-      '<span id="refresh-spin" style="margin-left:8px;font-size:0.75rem;color:var(--muted);">자동 갱신 중</span>',
-      '</div>',
-      // 방 목록
-      '<div id="room-list" style="flex:1;overflow-y:auto;padding:0 18px 18px;">',
-      list.length === 0
-        ? '<div class="card" style="text-align:center;color:var(--muted);padding:40px 18px;font-size:0.88rem;">개설된 방이 없습니다.<br><br>방 만들기를 눌러 첫 방을 개설하세요!</div>'
-        : list.map(function(r) {
-            var full = r.players.length >= r.maxPlayers;
-            return '<div class="card room-card" data-id="' + r.id + '" style="margin-bottom:10px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;transition:background 0.15s;" onmouseover="this.style.background=\'#334155\'" onmouseout="this.style.background=\'\'">' +
-              '<div>' +
-              '<div style="font-weight:800;font-size:0.95rem;margin-bottom:3px;">' + r.title + '</div>' +
-              '<div style="font-size:0.76rem;color:var(--sub);">' + catLabel(r.category) + ' · 대기 중</div>' +
-              '</div>' +
-              '<div style="text-align:right;">' +
-              '<div style="font-weight:900;font-size:0.9rem;color:' + (full ? 'var(--red)' : 'var(--focus)') + '">' + r.players.length + '/' + r.maxPlayers + '</div>' +
-              '<div style="font-size:0.72rem;color:var(--muted);">명</div>' +
-              '</div></div>';
-          }).join(""),
-      '</div>'
-    ].join("");
-    appEl.appendChild(div);
-    document.getElementById("create-btn").addEventListener("click", showCreateModal);
-    document.getElementById("quick-btn").addEventListener("click", function() {
-      var avail = list.find(function(r) { return r.players.length < r.maxPlayers && r.status === "waiting"; });
-      if (avail) doJoin(avail.id);
-      else alert("입장 가능한 방이 없습니다. 방을 직접 개설해 보세요!");
-    });
-    div.querySelectorAll(".room-card").forEach(function(el) {
-      el.addEventListener("click", function() { doJoin(el.dataset.id); });
-    });
-  }
-
-  function showCreateModal() {
-    var overlay = mk("div", "");
-    overlay.className = "overlay";
-    overlay.innerHTML = [
-      '<div class="overlay-box" style="max-width:360px;">',
-      '<h3 style="font-weight:900;font-size:1.1rem;margin-bottom:16px;">방 만들기</h3>',
-      '<label style="display:block;font-size:0.78rem;font-weight:700;color:var(--sub);margin-bottom:6px;">방 제목</label>',
-      '<input id="m-title" type="text" value="상식 한판 승부" style="margin-bottom:12px;">',
-      '<label style="display:block;font-size:0.78rem;font-weight:700;color:var(--sub);margin-bottom:6px;">카테고리</label>',
-      '<select id="m-cat" style="margin-bottom:12px;">',
-      '<option value="all">전체 상식 (추천)</option>',
-      '<option value="history">역사/문화</option>',
-      '<option value="science">과학/IT</option>',
-      '<option value="sports">스포츠/엔터</option>',
-      '<option value="economy">시사/경제</option>',
-      '</select>',
-      '<label style="display:block;font-size:0.78rem;font-weight:700;color:var(--sub);margin-bottom:6px;">최대 인원</label>',
-      '<select id="m-max" style="margin-bottom:18px;">',
-      '<option value="2">2명 (1:1)</option>',
-      '<option value="4" selected>4명 (권장)</option>',
-      '<option value="6">6명</option>',
-      '<option value="8">8명</option>',
-      '</select>',
-      '<div style="display:flex;gap:10px;">',
-      '<button id="m-cancel" class="btn-sub" style="flex:1;">취소</button>',
-      '<button id="m-ok" class="btn-gold" style="flex:1;">생성 및 입장</button>',
-      '</div></div>'
-    ].join("");
-    appEl.appendChild(overlay);
-    document.getElementById("m-cancel").addEventListener("click", function() { appEl.removeChild(overlay); });
-    document.getElementById("m-ok").addEventListener("click", function() {
-      var t = document.getElementById("m-title").value.trim();
-      var c = document.getElementById("m-cat").value;
-      var m = document.getElementById("m-max").value;
-      appEl.removeChild(overlay);
-      doCreate({ title: t, category: c, maxPlayers: m });
-    });
-  }
-
-  function doCreate(opts) {
-    opts.hostNickname = profile.nickname;
-    var room = createRoom(opts);
-    curRoomId = room.id;
-    curRoom = room;
-    appState = "WAITING";
+// 닉네임
+function renderNick(){
+  var div=el("div","flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:24px");
+  div.innerHTML=[
+    '<div style="width:100%;max-width:320px;text-align:center">',
+    '<div style="font-size:2.4rem;margin-bottom:6px">🏆</div>',
+    '<h1 style="font-size:1.6rem;font-weight:900;margin-bottom:6px">상식퀴즈대전</h1>',
+    '<p style="color:var(--sub);font-size:.88rem;margin-bottom:28px">실시간 멀티플레이 퀴즈</p>',
+    '<div class="card" style="padding:24px">',
+    '<label style="display:block;text-align:left;font-size:.8rem;font-weight:700;color:var(--sub);margin-bottom:10px">닉네임을 입력하세요</label>',
+    '<input id="ni" type="text" placeholder="최대 8자" maxlength="8" style="margin-bottom:14px;text-align:center;font-size:1rem">',
+    '<button id="nb" style="width:100%;font-size:1rem">대전 시작하기 →</button>',
+    '</div></div>'
+  ].join("");
+  appEl.appendChild(div);
+  var inp=document.getElementById("ni"),btn=document.getElementById("nb");
+  function go(){
+    var v=inp.value.trim();
+    if(!v){alert("닉네임을 입력해 주세요.");return;}
+    profile={nickname:v,avatar:v[0].toUpperCase()};
+    sessionStorage.setItem("tq_p",JSON.stringify(profile));
     render();
   }
+  btn.addEventListener("click",go);
+  inp.addEventListener("keydown",function(e){if(e.key==="Enter")go();});
+  inp.focus();
+}
 
-  function doJoin(roomId) {
-    // 로컬 맵에 해당 방이 없으면 → REQ_ROOM_LIST 후 대기 (보통 이 경우는 없어야 함)
-    var room = rooms.get(roomId);
-    if (!room) { alert("방 정보를 가져올 수 없습니다. 잠시 후 다시 시도해 주세요."); return; }
-    var joined = joinRoom(roomId, { id: MY_ID, nickname: profile.nickname });
-    if (!joined) return;
-    curRoomId = roomId;
-    curRoom = joined;
-    appState = "WAITING";
-    render();
-  }
-
-  // ── 대기실 ────────────────────────────────────────────────
-  function renderWaiting() {
-    var room = curRoom;
-    var me = room.players.find(function(p) { return p.id === MY_ID; });
-    var iAmHost = room.hostId === MY_ID;
-    var nonHostReady = room.players.filter(function(p) { return !p.isHost; }).every(function(p) { return p.isReady; });
-    var canStart = iAmHost && room.players.length >= 2 && nonHostReady;
-
-    var div = mk("div", "display:flex;flex-direction:column;height:100%;padding:18px;");
-    div.innerHTML = [
-      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:1px solid var(--border);padding-bottom:14px;">',
-      '<div>',
-      '<h2 style="font-size:1.15rem;font-weight:900;">' + room.title + '</h2>',
-      '<p style="color:var(--sub);font-size:0.76rem;margin-top:3px;">' + catLabel(room.category) + ' · ' + room.players.length + '/' + room.maxPlayers + '명</p>',
-      '</div>',
-      '<button id="leave-btn" class="btn-red" style="height:38px;padding:0 14px;font-size:0.82rem;">퇴장</button>',
-      '</div>',
-      '<div class="card" style="flex:1;margin-bottom:16px;overflow-y:auto;">',
-      '<div style="font-weight:700;font-size:0.8rem;color:var(--sub);margin-bottom:12px;">참가자 (' + room.players.length + '명)</div>',
-      '<div style="display:flex;flex-direction:column;gap:8px;">',
-      room.players.map(function(p) {
-        return '<div style="display:flex;align-items:center;justify-content:space-between;background:var(--input-bg);padding:10px 14px;border-radius:10px;border:1px solid var(--border);">' +
-          '<div style="display:flex;align-items:center;gap:10px;">' +
-          '<div class="avatar">' + p.nickname[0].toUpperCase() + '</div>' +
-          '<span style="font-weight:800;font-size:0.9rem;">' + p.nickname +
-          (p.id === MY_ID ? ' <span style="color:var(--focus);font-size:0.72rem;">(나)</span>' : '') + '</span>' +
-          '</div>' +
-          (p.isHost
-            ? '<span class="chip chip-host">HOST</span>'
-            : '<span class="chip ' + (p.isReady ? 'chip-ready' : 'chip-wait') + '">' + (p.isReady ? 'READY ✓' : 'WAITING') + '</span>') +
+// 로비
+function renderLobby(){
+  appState="LOBBY";
+  var list=getRooms();
+  var div=el("div","display:flex;flex-direction:column;height:100%");
+  div.innerHTML=[
+    '<div style="padding:16px 18px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">',
+    '<div><h1 style="font-size:1.2rem;font-weight:900">상식퀴즈대전</h1><p style="color:var(--sub);font-size:.76rem;margin-top:2px">방 참가 또는 직접 개설</p></div>',
+    '<span style="background:var(--card);padding:4px 12px;border-radius:10px;border:1px solid var(--border);font-weight:800;font-size:.83rem">'+profile.nickname+'</span>',
+    '</div>',
+    '<div style="padding:12px 18px;display:flex;gap:10px">',
+    '<button id="cb" class="btn-gold" style="flex:1">+ 방 만들기</button>',
+    '<button id="qb" style="flex:1">⚡ 빠른 입장</button>',
+    '</div>',
+    '<div style="padding:0 18px 8px;font-weight:700;font-size:.82rem;color:var(--sub)">대기 중인 방 ('+list.length+')</div>',
+    '<div id="rl" style="flex:1;overflow-y:auto;padding:0 18px 18px">',
+    list.length===0
+      ?'<div class="card" style="text-align:center;color:var(--muted);padding:40px 18px;font-size:.88rem">개설된 방이 없습니다.<br><br>방 만들기를 눌러 첫 방을 개설하세요!</div>'
+      :list.map(function(r){
+        var full=r.players.length>=r.maxPlayers;
+        return '<div class="card room-c" data-id="'+r.id+'" style="margin-bottom:10px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">'+
+          '<div><div style="font-weight:800;font-size:.95rem;margin-bottom:3px">'+r.title+'</div>'+
+          '<div style="font-size:.76rem;color:var(--sub)">'+catLabel(r.category)+' · 대기 중</div></div>'+
+          '<div style="font-weight:900;font-size:.9rem;color:'+(full?'var(--red)':'var(--focus)')+'">'+r.players.length+'/'+r.maxPlayers+' 명</div>'+
           '</div>';
       }).join(""),
-      '</div></div>',
-      '<div>',
-      iAmHost
-        ? '<div style="font-size:0.78rem;color:var(--muted);text-align:center;margin-bottom:8px;">' +
-          (canStart ? '모두 준비 완료! 게임을 시작하세요.' : '모든 참가자가 READY를 눌러야 시작할 수 있습니다.') + '</div>' +
-          '<button id="start-btn"' + (canStart ? '' : ' disabled') + ' class="btn-gold" style="width:100%;font-size:1rem;">게임 시작 ' + (canStart ? '▶' : '(대기 중)') + '</button>'
-        : '<button id="ready-btn" class="' + (me && me.isReady ? 'btn-sub' : '') + '" style="width:100%;font-size:1rem;">' +
-          (me && me.isReady ? '✓ READY 취소' : '준비 완료 (READY)') + '</button>',
-      '</div>'
-    ].join("");
-    appEl.appendChild(div);
+    '</div>'
+  ].join("");
+  appEl.appendChild(div);
+  document.getElementById("cb").addEventListener("click",showCreate);
+  document.getElementById("qb").addEventListener("click",function(){
+    var av=list.find(function(r){return r.players.length<r.maxPlayers&&r.status==="waiting";});
+    if(av) doJoin(av.id);
+    else alert("입장 가능한 방이 없습니다. 방을 직접 개설해 보세요!");
+  });
+  div.querySelectorAll(".room-c").forEach(function(e){
+    e.addEventListener("click",function(){doJoin(e.dataset.id);});
+  });
+}
 
-    document.getElementById("leave-btn").addEventListener("click", function() {
-      leaveRoom(curRoomId, MY_ID);
-      stopRoomBcast();
-      curRoomId = null; curRoom = null; appState = "LOBBY"; render();
-    });
-    var startBtn = document.getElementById("start-btn");
-    if (startBtn) startBtn.addEventListener("click", function() { if (canStart) startGame(); });
-    var readyBtn = document.getElementById("ready-btn");
-    if (readyBtn) readyBtn.addEventListener("click", function() { toggleReady(curRoomId, MY_ID); render(); });
-  }
+function showCreate(){
+  var ov=el("div","");ov.className="overlay";
+  ov.innerHTML=[
+    '<div class="overlay-box" style="max-width:360px">',
+    '<h3 style="font-weight:900;font-size:1.1rem;margin-bottom:16px">방 만들기</h3>',
+    '<label style="display:block;font-size:.78rem;font-weight:700;color:var(--sub);margin-bottom:6px">방 제목</label>',
+    '<input id="mt" type="text" value="상식 한판 승부" style="margin-bottom:12px">',
+    '<label style="display:block;font-size:.78rem;font-weight:700;color:var(--sub);margin-bottom:6px">카테고리</label>',
+    '<select id="mc" style="margin-bottom:12px"><option value="all">전체 상식 (추천)</option><option value="history">역사/문화</option><option value="science">과학/IT</option><option value="sports">스포츠/엔터</option><option value="economy">시사/경제</option></select>',
+    '<label style="display:block;font-size:.78rem;font-weight:700;color:var(--sub);margin-bottom:6px">최대 인원</label>',
+    '<select id="mm" style="margin-bottom:18px"><option value="2">2명 (1:1)</option><option value="4" selected>4명 (권장)</option><option value="6">6명</option><option value="8">8명</option></select>',
+    '<div style="display:flex;gap:10px"><button id="mx" class="btn-sub" style="flex:1">취소</button><button id="mok" class="btn-gold" style="flex:1">생성 및 입장</button></div>',
+    '</div>'
+  ].join("");
+  appEl.appendChild(ov);
+  document.getElementById("mx").addEventListener("click",function(){appEl.removeChild(ov);});
+  document.getElementById("mok").addEventListener("click",function(){
+    var t=document.getElementById("mt").value.trim();
+    var c=document.getElementById("mc").value;
+    var m=document.getElementById("mm").value;
+    appEl.removeChild(ov);
+    doCreate({title:t,category:c,maxPlayers:m});
+  });
+}
 
-  function startGame() {
-    var quiz = buildQuizSet(curRoom.category);
-    curRoom.quizSet = quiz;
-    curRoom.status = "playing";
-    curRoom.startTime = Date.now();
-    curRoom.subs = {};
-    upsertRoom(curRoom);
-    stopRoomBcast();
-    send("GAME_STARTED", { roomId: curRoomId, room: curRoom, quizSet: quiz, startTime: curRoom.startTime });
-    beginRound(0, curRoom.startTime);
-  }
+function doCreate(opts){
+  opts.hostNickname=profile.nickname;
+  var room=createRoom(opts);
+  curRoomId=room.id;curRoom=room;
+  appState="WAITING";render();
+}
+function doJoin(roomId){
+  var room=rooms.get(roomId);
+  if(!room){alert("방 정보를 찾을 수 없습니다. 잠시 후 다시 시도하세요.");return;}
+  var joined=joinRoom(roomId,{id:MY_ID,nickname:profile.nickname});
+  if(!joined) return;
+  curRoomId=roomId;curRoom=joined;appState="WAITING";render();
+}
 
-  // ── 퀴즈 ─────────────────────────────────────────────────
-  function beginRound(idx, startTs) {
-    if (timerInterval) clearInterval(timerInterval);
-    if (resultTimeout) clearTimeout(resultTimeout);
-    qIdx = idx;
-    submitted = false;
-    submittedAns = "";
-    roundOverlay = null;
-    if (curRoom) { curRoom.qIdx = idx; curRoom.startTime = startTs; }
-    var elapsed = Math.floor((Date.now() - startTs) / 1000);
-    timeLeft = Math.max(0, 15 - elapsed);
-    appState = "QUIZ";
-    render();
-    timerInterval = setInterval(function() {
-      var e = Math.floor((Date.now() - (curRoom ? curRoom.startTime : startTs)) / 1000);
-      timeLeft = Math.max(0, 15 - e);
-      updateTimer();
-      if (timeLeft <= 0) {
-        clearInterval(timerInterval); timerInterval = null;
-        timeLeft = 0; updateTimer();
-        if (isHost()) evaluateRound();
-      }
-    }, 500);
-  }
+// 대기실
+function renderWait(){
+  var room=curRoom;
+  var me=room.players.find(function(p){return p.id===MY_ID;});
+  var iHost=room.hostId===MY_ID;
+  var allRdy=room.players.filter(function(p){return!p.isHost;}).every(function(p){return p.isReady;});
+  var canStart=iHost&&room.players.length>=2&&allRdy;
+  var div=el("div","display:flex;flex-direction:column;height:100%;padding:18px");
+  div.innerHTML=[
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:1px solid var(--border);padding-bottom:14px">',
+    '<div><h2 style="font-size:1.15rem;font-weight:900">'+room.title+'</h2>',
+    '<p style="color:var(--sub);font-size:.76rem;margin-top:3px">'+catLabel(room.category)+' · '+room.players.length+'/'+room.maxPlayers+'명</p></div>',
+    '<button id="lb" class="btn-red" style="height:38px;padding:0 14px;font-size:.82rem">퇴장</button>',
+    '</div>',
+    '<div class="card" style="flex:1;margin-bottom:16px;overflow-y:auto">',
+    '<div style="font-weight:700;font-size:.8rem;color:var(--sub);margin-bottom:12px">참가자 ('+room.players.length+'명)</div>',
+    '<div style="display:flex;flex-direction:column;gap:8px">',
+    room.players.map(function(p){
+      return '<div style="display:flex;align-items:center;justify-content:space-between;background:var(--inp);padding:10px 14px;border-radius:10px;border:1px solid var(--border)">'+
+        '<div style="display:flex;align-items:center;gap:10px">'+
+        '<div class="avatar">'+p.nickname[0].toUpperCase()+'</div>'+
+        '<span style="font-weight:800;font-size:.9rem">'+p.nickname+(p.id===MY_ID?' <span style="color:var(--focus);font-size:.72rem">(나)</span>':'')+'</span>'+
+        '</div>'+
+        (p.isHost?'<span class="chip chip-host">HOST</span>':
+          '<span class="chip '+(p.isReady?'chip-ready':'chip-wait')+'">'+(p.isReady?'READY ✓':'WAITING')+'</span>')+
+        '</div>';
+    }).join(""),
+    '</div></div>',
+    '<div>',
+    iHost
+      ?'<div style="font-size:.76rem;color:var(--muted);text-align:center;margin-bottom:8px">'+(canStart?'모두 준비 완료! 게임을 시작하세요.':'모든 참가자가 READY를 눌러야 시작할 수 있습니다.')+'</div>'+
+        '<button id="sb"'+(canStart?'':' disabled')+' class="btn-gold" style="width:100%;font-size:1rem">게임 시작 '+(canStart?'▶':'(대기 중)')+'</button>'
+      :'<button id="rb" class="'+(me&&me.isReady?'btn-sub':'')+'" style="width:100%;font-size:1rem">'+(me&&me.isReady?'✓ READY 취소':'준비 완료 (READY)')+'</button>',
+    '</div>'
+  ].join("");
+  appEl.appendChild(div);
+  document.getElementById("lb").addEventListener("click",function(){
+    leaveRoom(curRoomId,MY_ID);
+    curRoomId=null;curRoom=null;appState="LOBBY";render();
+  });
+  var sb=document.getElementById("sb");
+  if(sb) sb.addEventListener("click",function(){if(canStart)startGame();});
+  var rb=document.getElementById("rb");
+  if(rb) rb.addEventListener("click",function(){toggleReady(curRoomId,MY_ID);render();});
+}
 
-  function isHost() { return curRoom && curRoom.hostId === MY_ID; }
+function startGame(){
+  var quiz=buildQuiz(curRoom.category);
+  curRoom.quizSet=quiz;curRoom.status="playing";
+  curRoom.startTime=Date.now();curRoom.subs={};
+  upsertRoom(curRoom);
+  pubRoom(curRoomId,"GAME_STARTED",{quizSet:quiz,startTime:curRoom.startTime,room:curRoom});
+  // 게임 시작 후 방 목록 업데이트 (대기 중인 방에서 제거)
+  publishRoomList();
+  beginRound(0,curRoom.startTime);
+}
 
-  function renderQuiz() {
-    var room = curRoom;
-    var quiz = room.quizSet[qIdx] || room.quizSet[0];
-    var total = room.quizSet.length;
-    var isGolden = quiz.sc === 2 || qIdx === total - 1;
-    var timerPct = timeLeft / 15 * 100;
-    var isWarn = timeLeft <= 4;
+// 퀴즈
+function beginRound(idx,startTs){
+  if(timerIv) clearInterval(timerIv);
+  if(resultTo) clearTimeout(resultTo);
+  qIdx=idx;submitted=false;submittedAns="";roundOverlay=null;
+  if(curRoom){curRoom.qIdx=idx;curRoom.startTime=startTs;}
+  var el0=Math.floor((Date.now()-startTs)/1000);
+  timeLeft=Math.max(0,15-el0);
+  appState="QUIZ";render();
+  timerIv=setInterval(function(){
+    var e=Math.floor((Date.now()-(curRoom?curRoom.startTime:startTs))/1000);
+    timeLeft=Math.max(0,15-e);
+    updTimer();
+    if(timeLeft<=0){clearInterval(timerIv);timerIv=null;timeLeft=0;updTimer();if(isHost())evalRound();}
+  },500);
+}
+function isHost(){return curRoom&&curRoom.hostId===MY_ID;}
 
-    var div = mk("div", "display:flex;flex-direction:column;height:100%;position:relative;");
-    div.innerHTML = [
-      '<div style="padding:16px 18px 8px;">',
-      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">',
-      '<div><div style="font-size:0.72rem;color:var(--sub);">QUESTION</div>',
-      '<h3 style="font-size:1.2rem;font-weight:900;">Q.' + (qIdx+1) + ' / ' + total + '</h3></div>',
-      isGolden
-        ? '<span class="chip chip-host" style="font-size:0.78rem;padding:4px 10px;">💡 골든벨 2점</span>'
-        : '<span class="chip" style="background:var(--border);color:var(--sub);font-size:0.78rem;padding:4px 10px;">일반 1점</span>',
-      '</div>',
-      '<div class="timer-wrap"><div id="t-bar" class="timer-fill' + (isWarn ? ' warn' : '') + '" style="width:' + timerPct + '%;"></div></div>',
-      '<div style="display:flex;justify-content:space-between;font-size:0.76rem;color:var(--muted);margin-top:-8px;margin-bottom:10px;">',
-      '<span>남은 시간</span>',
-      '<span id="t-text" style="font-weight:900;color:' + (isWarn ? 'var(--red)' : 'var(--focus)') + ';">' + timeLeft + '초</span>',
-      '</div></div>',
-      '<div style="padding:0 18px;flex:1;overflow-y:auto;">',
-      '<div class="q-box">' + quiz.q + '</div>',
-      '<div class="card" style="padding:10px 14px;margin-bottom:12px;">',
-      '<div style="font-size:0.76rem;font-weight:700;color:var(--sub);margin-bottom:7px;">제출 현황</div>',
-      '<div style="display:flex;flex-wrap:wrap;gap:5px;">',
-      room.players.map(function(p) {
-        var hasSub = room.subs && room.subs[qIdx] && room.subs[qIdx][p.id];
-        return '<div style="display:flex;align-items:center;gap:4px;background:var(--input-bg);padding:3px 8px;border-radius:7px;font-size:0.76rem;border:1px solid var(--border);">' +
-          '<span style="font-weight:800;">' + p.nickname + '</span>' +
-          '<span class="chip ' + (hasSub ? 'chip-ok' : '') + '" style="font-size:0.66rem;padding:1px 5px;' + (!hasSub ? 'background:var(--border);color:var(--muted);' : '') + '">' +
-          (hasSub ? '제출' : '대기') + '</span></div>';
-      }).join(""),
-      '</div></div></div>',
-      '<div class="bottom-bar">',
-      '<form id="ans-form" style="display:flex;gap:8px;">',
-      '<input id="ans-in" type="text" placeholder="' + (submitted ? '제출 완료 ✓' : '정답 입력 후 엔터') + '" value="' + (submittedAns || '') + '" ' + (submitted || timeLeft <= 0 ? 'disabled' : '') + ' style="flex:1;">',
-      '<button type="submit" class="' + (isGolden ? 'btn-gold' : '') + '" style="width:78px;" ' + (submitted || timeLeft <= 0 ? 'disabled' : '') + '>' + (submitted ? '완료' : '제출') + '</button>',
-      '</form></div>'
-    ].join("");
-    appEl.appendChild(div);
+function renderQuiz(){
+  var room=curRoom;
+  var quiz=room.quizSet[qIdx]||room.quizSet[0];
+  var total=room.quizSet.length;
+  var golden=quiz.sc===2||qIdx===total-1;
+  var pct=timeLeft/15*100,warn=timeLeft<=4;
+  var div=el("div","display:flex;flex-direction:column;height:100%;position:relative");
+  div.innerHTML=[
+    '<div style="padding:16px 18px 8px">',
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">',
+    '<div><div style="font-size:.72rem;color:var(--sub)">QUESTION</div><h3 style="font-size:1.2rem;font-weight:900">Q.'+(qIdx+1)+' / '+total+'</h3></div>',
+    golden?'<span class="chip chip-host" style="font-size:.78rem;padding:4px 10px">💡 골든벨 2점</span>':
+           '<span class="chip" style="background:var(--border);color:var(--sub);font-size:.78rem;padding:4px 10px">일반 1점</span>',
+    '</div>',
+    '<div class="timer-wrap"><div id="tb" class="timer-fill'+(warn?' warn':'')+'" style="width:'+pct+'%"></div></div>',
+    '<div style="display:flex;justify-content:space-between;font-size:.76rem;color:var(--muted);margin-top:-8px;margin-bottom:10px">',
+    '<span>남은 시간</span><span id="tt" style="font-weight:900;color:'+(warn?'var(--red)':'var(--focus)')+'">'+timeLeft+'초</span>',
+    '</div></div>',
+    '<div style="padding:0 18px;flex:1;overflow-y:auto">',
+    '<div class="q-box">'+quiz.q+'</div>',
+    '<div class="card" style="padding:10px 14px;margin-bottom:12px">',
+    '<div style="font-size:.76rem;font-weight:700;color:var(--sub);margin-bottom:7px">제출 현황</div>',
+    '<div style="display:flex;flex-wrap:wrap;gap:5px">',
+    room.players.map(function(p){
+      var has=room.subs&&room.subs[qIdx]&&room.subs[qIdx][p.id];
+      return '<div style="display:flex;align-items:center;gap:4px;background:var(--inp);padding:3px 8px;border-radius:7px;font-size:.76rem;border:1px solid var(--border)">'+
+        '<span style="font-weight:800">'+p.nickname+'</span>'+
+        '<span class="chip '+(has?'chip-ok':'')+'" style="font-size:.66rem;padding:1px 5px;'+(has?'':'background:var(--border);color:var(--muted)')+'">'+
+        (has?'제출':'대기')+'</span></div>';
+    }).join(""),
+    '</div></div></div>',
+    '<div class="bottom-bar">',
+    '<form id="af" style="display:flex;gap:8px">',
+    '<input id="ai" type="text" placeholder="'+(submitted?'제출 완료 ✓':'정답 입력 후 엔터')+'" value="'+(submittedAns||'')+'" '+(submitted||timeLeft<=0?'disabled':'')+' style="flex:1">',
+    '<button type="submit" class="'+(golden?'btn-gold':'')+'" style="width:78px" '+(submitted||timeLeft<=0?'disabled':'')+'>'+
+    (submitted?'완료':'제출')+'</button>',
+    '</form></div>'
+  ].join("");
+  appEl.appendChild(div);
+  var form=document.getElementById("af");
+  if(form) form.addEventListener("submit",function(e){
+    e.preventDefault();
+    var ans=document.getElementById("ai").value.trim();
+    if(!ans){alert("답안을 입력해 주세요.");return;}
+    submitAns(ans);
+  });
+  if(roundOverlay) showOverlay(roundOverlay);
+}
 
-    var form = document.getElementById("ans-form");
-    if (form) form.addEventListener("submit", function(e) {
-      e.preventDefault();
-      var ans = document.getElementById("ans-in").value.trim();
-      if (!ans) { alert("답안을 입력해 주세요."); return; }
-      submitAnswer(ans);
-    });
-    if (roundOverlay) showRoundOverlay(roundOverlay);
-  }
+function updTimer(){
+  var b=document.getElementById("tb"),t=document.getElementById("tt");
+  if(!b||!t) return;
+  b.style.width=(timeLeft/15*100)+"%";
+  var w=timeLeft<=4;
+  b.className="timer-fill"+(w?" warn":"");
+  t.textContent=timeLeft+"초";
+  t.style.color=w?"var(--red)":"var(--focus)";
+}
 
-  function updateTimer() {
-    var bar = document.getElementById("t-bar");
-    var txt = document.getElementById("t-text");
-    if (!bar || !txt) return;
-    bar.style.width = (timeLeft / 15 * 100) + "%";
-    var warn = timeLeft <= 4;
-    bar.className = "timer-fill" + (warn ? " warn" : "");
-    txt.textContent = timeLeft + "초";
-    txt.style.color = warn ? "var(--red)" : "var(--focus)";
-  }
-
-  function submitAnswer(ans) {
-    if (submitted) return;
-    submitted = true; submittedAns = ans;
-    var quiz = curRoom.quizSet[qIdx];
-    var correct = checkAnswer(ans, quiz.a);
-    var sub = {
-      playerId: MY_ID, nickname: profile.nickname,
-      answer: ans, isCorrect: correct,
-      score: correct ? quiz.sc : 0,
-      timeTaken: Date.now() - curRoom.startTime
-    };
-    if (!curRoom.subs) curRoom.subs = {};
-    if (!curRoom.subs[qIdx]) curRoom.subs[qIdx] = {};
-    curRoom.subs[qIdx][MY_ID] = sub;
-    upsertRoom(curRoom);
-    send("SUBMITTED_ANSWER", { roomId: curRoomId, qIdx: qIdx, sub: sub });
-    if (isHost()) checkAllSubmitted();
-    render();
-  }
-
-  function checkAllSubmitted() {
-    if (!isHost() || !curRoom) return;
-    var subs = (curRoom.subs && curRoom.subs[qIdx]) || {};
-    if (Object.keys(subs).length >= curRoom.players.length) {
-      if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
-      evaluateRound();
-    }
-  }
-
-  function evaluateRound() {
-    if (!isHost() || !curRoom) return;
-    var quiz = curRoom.quizSet[qIdx];
-    var subs = (curRoom.subs && curRoom.subs[qIdx]) || {};
-    var results = curRoom.players.map(function(p) {
-      var s = subs[p.id];
-      var correct = s ? s.isCorrect : false;
-      var earned = correct ? quiz.sc : 0;
-      p.score = (p.score || 0) + earned;
-      p.totalTime = (p.totalTime || 0) + (s ? s.timeTaken : 15000);
-      return { id: p.id, nickname: p.nickname, isCorrect: correct, earnedScore: earned, score: p.score, userAnswer: s ? s.answer : "" };
-    });
-    upsertRoom(curRoom);
-    var result = { qIdx: qIdx, correctAnswerText: quiz.a[0], players: results, room: curRoom };
-    send("ROUND_RESULT", { roomId: curRoomId, result: result });
-    handleRoundResult(result);
-  }
-
-  function handleRoundResult(result) {
-    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
-    roundOverlay = result;
-    if (result.room) { curRoom = result.room; upsertRoom(curRoom); }
-    render();
-    if (resultTimeout) clearTimeout(resultTimeout);
-    resultTimeout = setTimeout(function() {
-      roundOverlay = null;
-      if (isHost()) {
-        var next = qIdx + 1;
-        if (curRoom && next < curRoom.quizSet.length) {
-          curRoom.startTime = Date.now();
-          upsertRoom(curRoom);
-          send("NEXT_ROUND", { roomId: curRoomId, qIdx: next, startTime: curRoom.startTime });
-          beginRound(next, curRoom.startTime);
-        } else {
-          send("GAME_OVER", { roomId: curRoomId });
-          appState = "RESULT"; render();
-        }
-      }
-    }, 3500);
-  }
-
-  function showRoundOverlay(result) {
-    var overlay = mk("div", "");
-    overlay.className = "overlay";
-    var correct = result.players.filter(function(p) { return p.isCorrect; });
-    var wrong = result.players.filter(function(p) { return !p.isCorrect; });
-    overlay.innerHTML = [
-      '<div class="overlay-box">',
-      '<div style="text-align:center;font-size:0.76rem;color:var(--sub);">Q.' + (result.qIdx+1) + ' 라운드 결과</div>',
-      '<h3 style="text-align:center;font-size:1.15rem;font-weight:900;margin:4px 0 14px;">정답 공개</h3>',
-      '<div style="background:rgba(59,130,246,0.12);border:1px solid var(--focus);border-radius:10px;padding:10px;text-align:center;font-weight:800;margin-bottom:14px;">',
-      '정답: <span style="font-size:1.15rem;">' + result.correctAnswerText + '</span>',
-      '</div>',
-      '<div style="font-size:0.8rem;font-weight:800;color:var(--green);margin-bottom:6px;">✓ 정답자 (' + correct.length + '명)</div>',
-      '<div style="display:flex;flex-direction:column;gap:5px;margin-bottom:12px;">',
-      (correct.length === 0 ? '<div style="font-size:0.78rem;color:var(--muted);">없음</div>' :
-        correct.map(function(p) {
-          return '<div style="display:flex;justify-content:space-between;align-items:center;background:var(--input-bg);padding:7px 12px;border-radius:8px;border:1px solid var(--border);">' +
-            '<span style="font-weight:800;font-size:0.88rem;">' + p.nickname + '</span>' +
-            '<span class="chip chip-ok">+' + p.earnedScore + '점 (' + p.score + '점)</span></div>';
-        }).join("")),
-      '</div>',
-      '<div style="font-size:0.8rem;font-weight:800;color:var(--red);margin-bottom:6px;">✗ 오답/미제출 (' + wrong.length + '명)</div>',
-      '<div style="display:flex;flex-direction:column;gap:5px;">',
-      (wrong.length === 0 ? '<div style="font-size:0.78rem;color:var(--muted);">없음</div>' :
-        wrong.map(function(p) {
-          return '<div style="display:flex;justify-content:space-between;align-items:center;background:var(--input-bg);padding:7px 12px;border-radius:8px;border:1px solid var(--border);">' +
-            '<span style="font-weight:800;font-size:0.88rem;">' + p.nickname + ' <span style="font-size:0.7rem;color:var(--muted);">"' + (p.userAnswer || '미제출') + '"</span></span>' +
-            '<span class="chip chip-err">+0점</span></div>';
-        }).join("")),
-      '</div>',
-      '<div style="text-align:center;font-size:0.76rem;color:var(--muted);margin-top:14px;">잠시 후 다음 문제로 이동...</div>',
-      '</div>'
-    ].join("");
-    appEl.appendChild(overlay);
-  }
-
-  // ── 결과 화면 ─────────────────────────────────────────────
-  function renderResult() {
-    var sorted = curRoom.players.slice().sort(function(a, b) {
-      return b.score !== a.score ? b.score - a.score : (a.totalTime || 0) - (b.totalTime || 0);
-    });
-    var div = mk("div", "display:flex;flex-direction:column;height:100%;padding:18px;overflow-y:auto;");
-    var p1 = sorted[0] || { nickname: "-", score: 0 };
-    var p2 = sorted[1] || null;
-    var p3 = sorted[2] || null;
-    div.innerHTML = [
-      '<div style="text-align:center;margin-bottom:12px;">',
-      '<div style="font-size:1.8rem;margin-bottom:4px;">🏆</div>',
-      '<h2 style="font-size:1.3rem;font-weight:900;">FINAL RESULT</h2>',
-      '<p style="color:var(--sub);font-size:0.8rem;margin-top:4px;">10라운드 대전 종료</p>',
-      '</div>',
-      '<div class="podium-wrap">',
-      (p2 ? '<div class="podium-slot r2"><div class="p-name">' + p2.nickname + '</div><div class="p-score">' + p2.score + '점</div><div class="podium-box">2</div></div>' : '<div class="podium-slot r2"></div>'),
-      '<div class="podium-slot r1"><div style="font-size:0.68rem;font-weight:900;color:var(--gold);margin-bottom:2px;">CHAMPION</div><div class="p-name" style="font-size:0.95rem;">' + p1.nickname + '</div><div class="p-score" style="color:var(--gold);">' + p1.score + '점</div><div class="podium-box">1</div></div>',
-      (p3 ? '<div class="podium-slot r3"><div class="p-name">' + p3.nickname + '</div><div class="p-score">' + p3.score + '점</div><div class="podium-box">3</div></div>' : '<div class="podium-slot r3"></div>'),
-      '</div>',
-      '<div class="card" style="margin-bottom:14px;">',
-      '<div style="font-weight:700;font-size:0.8rem;color:var(--sub);margin-bottom:10px;">종합 순위</div>',
-      sorted.map(function(p, i) {
-        return '<div style="display:flex;justify-content:space-between;align-items:center;background:var(--input-bg);padding:10px 14px;border-radius:10px;border:1px solid var(--border);margin-bottom:' + (i < sorted.length-1 ? '7' : '0') + 'px;">' +
-          '<div style="display:flex;align-items:center;gap:10px;">' +
-          '<span style="font-weight:900;font-size:0.95rem;width:28px;color:' + (i===0?'var(--gold)':'var(--text)') + '">' + (i+1) + '위</span>' +
-          '<span style="font-weight:800;font-size:0.9rem;">' + p.nickname + '</span>' +
-          '</div>' +
-          '<span style="font-weight:900;font-size:1rem;color:var(--focus);">' + p.score + '점</span></div>';
-      }).join(""),
-      '</div>',
-      '<button id="lobby-btn" style="width:100%;">로비로 돌아가기</button>'
-    ].join("");
-    appEl.appendChild(div);
-    document.getElementById("lobby-btn").addEventListener("click", function() {
-      leaveRoom(curRoomId, MY_ID);
-      curRoomId = null; curRoom = null; appState = "LOBBY"; render();
-    });
-  }
-
-  // ── 메시지 핸들러 ─────────────────────────────────────────
-  function handleMessage(msg) {
-    var type = msg.type;
-    var p = msg.payload || {};
-
-    if (type === "REQ_ROOM_LIST") {
-      // ★ 다른 클라이언트가 방 목록 요청 → 내가 가진 방이 있으면 즉시 응답
-      var list = getRooms();
-      if (list.length > 0) send("ROOM_LIST_UPDATE", { rooms: list });
-    }
-    else if (type === "ROOM_LIST_UPDATE") {
-      if (!Array.isArray(p.rooms)) return;
-      // 머지: 내가 없는 방만 받아오기
-      p.rooms.forEach(function(r) {
-        if (!r || !r.id) return;
-        // 내가 호스트인 방은 덮어쓰지 않음
-        var existing = rooms.get(r.id);
-        if (existing && existing.hostId === MY_ID) return;
-        if (r.players && r.players.length > 0) rooms.set(r.id, r);
-        else rooms.delete(r.id);
-      });
-      if (appState === "LOBBY") render();
-    }
-    else if (type === "ROOM_STATE_UPDATE") {
-      if (!p.room) return;
-      var r = p.room;
-      // 내가 호스트인 방은 덮어쓰지 않음
-      if (r.hostId !== MY_ID) upsertRoom(r);
-      if (curRoomId && r.id === curRoomId) {
-        curRoom = rooms.get(curRoomId) || r;
-        if (appState === "WAITING") render();
-      }
-    }
-    else if (type === "GAME_STARTED") {
-      if (!curRoomId || p.roomId !== curRoomId) return;
-      if (p.room) { curRoom = p.room; upsertRoom(curRoom); }
-      if (p.quizSet) curRoom.quizSet = p.quizSet;
-      curRoom.startTime = p.startTime || Date.now();
-      upsertRoom(curRoom);
-      beginRound(0, curRoom.startTime);
-    }
-    else if (type === "SUBMITTED_ANSWER") {
-      if (!curRoomId || p.roomId !== curRoomId || !p.sub) return;
-      if (!curRoom.subs) curRoom.subs = {};
-      if (!curRoom.subs[p.qIdx]) curRoom.subs[p.qIdx] = {};
-      curRoom.subs[p.qIdx][p.sub.playerId] = p.sub;
-      upsertRoom(curRoom);
-      if (isHost()) checkAllSubmitted();
-      if (appState === "QUIZ") render();
-    }
-    else if (type === "ROUND_RESULT") {
-      if (!curRoomId || p.roomId !== curRoomId) return;
-      if (!isHost()) handleRoundResult(p.result);
-    }
-    else if (type === "NEXT_ROUND") {
-      if (!curRoomId || p.roomId !== curRoomId || isHost()) return;
-      if (p.startTime && curRoom) curRoom.startTime = p.startTime;
-      beginRound(p.qIdx, p.startTime);
-    }
-    else if (type === "GAME_OVER") {
-      if (!curRoomId || p.roomId !== curRoomId) return;
-      appState = "RESULT"; render();
-    }
-    else if (type === "HOST_CHANGED") {
-      if (!curRoomId || p.roomId !== curRoomId) return;
-      if (p.newHostId === MY_ID) {
-        // 내가 새 호스트가 됨
-        if (curRoom) curRoom.hostId = MY_ID;
-        startRoomBcast();
-      }
-    }
-  }
-
-  // ── 유틸 ─────────────────────────────────────────────────
-  function mk(tag, style) {
-    var el = document.createElement(tag);
-    if (style) el.style.cssText = style;
-    return el;
-  }
-
-  // ── 시작 ─────────────────────────────────────────────────
-  initNet(handleMessage);
+function submitAns(ans){
+  if(submitted) return;
+  submitted=true;submittedAns=ans;
+  var quiz=curRoom.quizSet[qIdx];
+  var correct=checkAns(ans,quiz.a);
+  var sub={playerId:MY_ID,nickname:profile.nickname,answer:ans,isCorrect:correct,score:correct?quiz.sc:0,timeTaken:Date.now()-curRoom.startTime};
+  if(!curRoom.subs)curRoom.subs={};
+  if(!curRoom.subs[qIdx])curRoom.subs[qIdx]={};
+  curRoom.subs[qIdx][MY_ID]=sub;
+  upsertRoom(curRoom);
+  pubRoom(curRoomId,"SUBMITTED_ANSWER",{qIdx:qIdx,sub:sub});
+  if(isHost()) checkAllSub();
   render();
+}
+
+function checkAllSub(){
+  if(!isHost()||!curRoom) return;
+  var subs=(curRoom.subs&&curRoom.subs[qIdx])||{};
+  if(Object.keys(subs).length>=curRoom.players.length){
+    if(timerIv){clearInterval(timerIv);timerIv=null;}
+    evalRound();
+  }
+}
+
+function evalRound(){
+  if(!isHost()||!curRoom) return;
+  var quiz=curRoom.quizSet[qIdx];
+  var subs=(curRoom.subs&&curRoom.subs[qIdx])||{};
+  var results=curRoom.players.map(function(p){
+    var s=subs[p.id];
+    var correct=s?s.isCorrect:false;
+    var earned=correct?quiz.sc:0;
+    p.score=(p.score||0)+earned;
+    p.totalTime=(p.totalTime||0)+(s?s.timeTaken:15000);
+    return{id:p.id,nickname:p.nickname,isCorrect:correct,earnedScore:earned,score:p.score,userAnswer:s?s.answer:""};
+  });
+  upsertRoom(curRoom);
+  var result={qIdx:qIdx,correctAnswerText:quiz.a[0],players:results,room:curRoom};
+  pubRoom(curRoomId,"ROUND_RESULT",{result:result});
+  handleResult(result);
+}
+
+function handleResult(result){
+  if(timerIv){clearInterval(timerIv);timerIv=null;}
+  roundOverlay=result;
+  if(result.room){curRoom=result.room;upsertRoom(curRoom);}
+  render();
+  if(resultTo) clearTimeout(resultTo);
+  resultTo=setTimeout(function(){
+    roundOverlay=null;
+    if(isHost()){
+      var next=qIdx+1;
+      if(curRoom&&next<curRoom.quizSet.length){
+        curRoom.startTime=Date.now();upsertRoom(curRoom);
+        pubRoom(curRoomId,"NEXT_ROUND",{qIdx:next,startTime:curRoom.startTime});
+        beginRound(next,curRoom.startTime);
+      } else {
+        pubRoom(curRoomId,"GAME_OVER",{});
+        appState="RESULT";render();
+      }
+    }
+  },3500);
+}
+
+function showOverlay(result){
+  var ov=el("div","");ov.className="overlay";
+  var ok=result.players.filter(function(p){return p.isCorrect;});
+  var bad=result.players.filter(function(p){return!p.isCorrect;});
+  ov.innerHTML=[
+    '<div class="overlay-box">',
+    '<div style="text-align:center;font-size:.76rem;color:var(--sub)">Q.'+(result.qIdx+1)+' 라운드 결과</div>',
+    '<h3 style="text-align:center;font-size:1.15rem;font-weight:900;margin:4px 0 14px">정답 공개</h3>',
+    '<div style="background:rgba(59,130,246,.12);border:1px solid var(--focus);border-radius:10px;padding:10px;text-align:center;font-weight:800;margin-bottom:14px">',
+    '정답: <span style="font-size:1.15rem">'+result.correctAnswerText+'</span></div>',
+    '<div style="font-size:.8rem;font-weight:800;color:var(--green);margin-bottom:6px">✓ 정답자 ('+ok.length+'명)</div>',
+    '<div style="display:flex;flex-direction:column;gap:5px;margin-bottom:12px">',
+    ok.length===0?'<div style="font-size:.78rem;color:var(--muted)">없음</div>':
+    ok.map(function(p){return'<div style="display:flex;justify-content:space-between;align-items:center;background:var(--inp);padding:7px 12px;border-radius:8px;border:1px solid var(--border)"><span style="font-weight:800;font-size:.88rem">'+p.nickname+'</span><span class="chip chip-ok">+'+p.earnedScore+'점 ('+p.score+'점)</span></div>';}).join(""),
+    '</div>',
+    '<div style="font-size:.8rem;font-weight:800;color:var(--red);margin-bottom:6px">✗ 오답/미제출 ('+bad.length+'명)</div>',
+    '<div style="display:flex;flex-direction:column;gap:5px">',
+    bad.length===0?'<div style="font-size:.78rem;color:var(--muted)">없음</div>':
+    bad.map(function(p){return'<div style="display:flex;justify-content:space-between;align-items:center;background:var(--inp);padding:7px 12px;border-radius:8px;border:1px solid var(--border)"><span style="font-weight:800;font-size:.88rem">'+p.nickname+' <span style="font-size:.7rem;color:var(--muted)">"'+(p.userAnswer||'미제출')+'"</span></span><span class="chip chip-err">+0점</span></div>';}).join(""),
+    '</div>',
+    '<div style="text-align:center;font-size:.76rem;color:var(--muted);margin-top:14px">잠시 후 다음 문제로 이동...</div>',
+    '</div>'
+  ].join("");
+  appEl.appendChild(ov);
+}
+
+// 결과
+function renderResult(){
+  var sorted=curRoom.players.slice().sort(function(a,b){return b.score!==a.score?b.score-a.score:(a.totalTime||0)-(b.totalTime||0);});
+  var p1=sorted[0]||{nickname:"-",score:0},p2=sorted[1]||null,p3=sorted[2]||null;
+  var div=el("div","display:flex;flex-direction:column;height:100%;padding:18px;overflow-y:auto");
+  div.innerHTML=[
+    '<div style="text-align:center;margin-bottom:12px"><div style="font-size:1.8rem;margin-bottom:4px">🏆</div>',
+    '<h2 style="font-size:1.3rem;font-weight:900">FINAL RESULT</h2>',
+    '<p style="color:var(--sub);font-size:.8rem;margin-top:4px">10라운드 대전 종료</p></div>',
+    '<div class="podium-wrap">',
+    p2?'<div class="podium-slot r2"><div class="p-name">'+p2.nickname+'</div><div class="p-score">'+p2.score+'점</div><div class="podium-box">2</div></div>':'<div class="podium-slot r2"></div>',
+    '<div class="podium-slot r1"><div style="font-size:.68rem;font-weight:900;color:var(--gold);margin-bottom:2px">CHAMPION</div><div class="p-name" style="font-size:.95rem">'+p1.nickname+'</div><div class="p-score" style="color:var(--gold)">'+p1.score+'점</div><div class="podium-box">1</div></div>',
+    p3?'<div class="podium-slot r3"><div class="p-name">'+p3.nickname+'</div><div class="p-score">'+p3.score+'점</div><div class="podium-box">3</div></div>':'<div class="podium-slot r3"></div>',
+    '</div>',
+    '<div class="card" style="margin-bottom:14px"><div style="font-weight:700;font-size:.8rem;color:var(--sub);margin-bottom:10px">종합 순위</div>',
+    sorted.map(function(p,i){
+      return'<div style="display:flex;justify-content:space-between;align-items:center;background:var(--inp);padding:10px 14px;border-radius:10px;border:1px solid var(--border);margin-bottom:'+(i<sorted.length-1?'7':'0')+'px">'+
+        '<div style="display:flex;align-items:center;gap:10px">'+
+        '<span style="font-weight:900;font-size:.95rem;width:28px;color:'+(i===0?'var(--gold)':'var(--txt)')+'">'+(i+1)+'위</span>'+
+        '<span style="font-weight:800;font-size:.9rem">'+p.nickname+'</span></div>'+
+        '<span style="font-weight:900;font-size:1rem;color:var(--focus)">'+p.score+'점</span></div>';
+    }).join(""),
+    '</div>',
+    '<button id="lbtn" style="width:100%">로비로 돌아가기</button>'
+  ].join("");
+  appEl.appendChild(div);
+  document.getElementById("lbtn").addEventListener("click",function(){
+    leaveRoom(curRoomId,MY_ID);
+    curRoomId=null;curRoom=null;appState="LOBBY";render();
+  });
+}
+
+// ──────────────────────────────────────────────────────────
+//  MQTT 메시지 핸들러
+// ──────────────────────────────────────────────────────────
+function onMqttMsg(msg, topic) {
+  var type=msg.type, p=msg.payload||msg;
+
+  // 방 목록 토픽
+  if(topic===TOPIC_ROOMS){
+    if(type==="ROOM_LIST_UPDATE"&&Array.isArray(p.rooms)){
+      mergeRooms(p.rooms);
+      if(appState==="LOBBY") render();
+    }
+    return;
+  }
+
+  // 방별 토픽 (curRoomId 관련만 처리)
+  if(!curRoomId) return;
+  var roomTopic=TOPIC_ROOM+curRoomId;
+  if(topic!==roomTopic) return;
+
+  if(type==="ROOM_STATE_UPDATE"){
+    if(p.room&&p.room.hostId!==MY_ID){
+      upsertRoom(p.room);curRoom=rooms.get(curRoomId)||p.room;
+      if(appState==="WAITING") render();
+    }
+  }
+  else if(type==="HOST_CHANGED"){
+    if(p.newHostId===MY_ID&&curRoom){curRoom.hostId=MY_ID;publishRoomList();}
+    if(p.room){upsertRoom(p.room);curRoom=rooms.get(curRoomId)||p.room;}
+    if(appState==="WAITING") render();
+  }
+  else if(type==="GAME_STARTED"){
+    if(p.room){curRoom=p.room;upsertRoom(curRoom);}
+    if(p.quizSet) curRoom.quizSet=p.quizSet;
+    curRoom.startTime=p.startTime||Date.now();
+    upsertRoom(curRoom);
+    beginRound(0,curRoom.startTime);
+  }
+  else if(type==="SUBMITTED_ANSWER"){
+    if(!p.sub) return;
+    if(!curRoom.subs)curRoom.subs={};
+    if(!curRoom.subs[p.qIdx])curRoom.subs[p.qIdx]={};
+    curRoom.subs[p.qIdx][p.sub.playerId]=p.sub;
+    upsertRoom(curRoom);
+    if(isHost()) checkAllSub();
+    if(appState==="QUIZ") render();
+  }
+  else if(type==="ROUND_RESULT"){
+    if(!isHost()&&p.result) handleResult(p.result);
+  }
+  else if(type==="NEXT_ROUND"){
+    if(!isHost()){
+      if(p.startTime&&curRoom) curRoom.startTime=p.startTime;
+      beginRound(p.qIdx,p.startTime);
+    }
+  }
+  else if(type==="GAME_OVER"){
+    appState="RESULT";render();
+  }
+}
+
+// ── 유틸 ─────────────────────────────────────────────────
+function el(tag,style){var e=document.createElement(tag);if(style)e.style.cssText=style;return e;}
+
+// ── 시작 ─────────────────────────────────────────────────
+initMQTT(onMqttMsg);
+render();
 
 })();
 </script>
