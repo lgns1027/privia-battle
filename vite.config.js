@@ -1,7 +1,13 @@
 import { defineConfig } from 'vite';
+import { viteSingleFile } from 'vite-plugin-singlefile';
 
 export default defineConfig({
-  base: './', // GitHub Pages 상대 경로 배포 지원
+  plugins: [viteSingleFile()],
+  build: {
+    target: 'es2015',
+    cssCodeSplit: false,
+    assetsInlineLimit: 100000000,
+  },
   server: {
     port: 3000,
     open: true
