@@ -1,0 +1,341 @@
+/* ==========================================================================
+   상식퀴즈대전 - Clean Professional UI System (Dynamic Viewport v2)
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800;900&display=swap');
+
+:root {
+  --bg-color: #0f172a;
+  --card-bg: #1e293b;
+  --card-hover: #334155;
+  --input-bg: #0f172a;
+
+  --border-color: #334155;
+  --border-focus: #3b82f6;
+
+  --text-main: #ffffff;
+  --text-sub: #94a3b8;
+  --text-muted: #64748b;
+
+  --btn-blue: #2563eb;
+  --btn-blue-hover: #1d4ed8;
+  --btn-gold: #f59e0b;
+  --btn-gold-hover: #d97706;
+  --btn-red: #ef4444;
+  --btn-red-hover: #dc2626;
+  --btn-sub: #334155;
+  --btn-sub-hover: #475569;
+
+  --color-success: #10b981;
+  --color-error: #ef4444;
+
+  --font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --radius-card: 16px;
+  --radius-btn: 12px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  font-family: var(--font-family);
+  background-color: var(--bg-color);
+  color: var(--text-main);
+  min-height: 100vh;
+  min-height: 100dvh; /* [결함 ⑩ 해결]: Dynamic Viewport Height */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow-x: hidden;
+}
+
+/* Chrome Mobile Frame */
+#app {
+  width: 100%;
+  max-width: 440px;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-color);
+  position: relative;
+}
+
+@media (min-width: 480px) {
+  #app {
+    min-height: 840px;
+    height: 840px;
+    border-radius: 24px;
+    border: 1px solid var(--border-color);
+    margin: 20px 0;
+    overflow: hidden;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+  }
+}
+
+/* Card Surface */
+.clean-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  width: 100%;
+}
+
+/* Typography */
+.brand-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--text-main);
+  letter-spacing: -0.02em;
+}
+
+.brand-desc {
+  font-size: 0.85rem;
+  color: var(--text-sub);
+  margin-top: 4px;
+}
+
+/* Form Input */
+.clean-input {
+  width: 100%;
+  height: 50px;
+  padding: 0 16px;
+  background: var(--input-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-btn);
+  color: #ffffff;
+  font-size: 1rem;
+  font-weight: 600;
+  outline: none;
+}
+
+.clean-input:focus {
+  border-color: var(--border-focus);
+}
+
+/* Buttons */
+button, .clean-btn {
+  height: 50px;
+  padding: 0 20px;
+  border-radius: var(--radius-btn);
+  border: none;
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-family: var(--font-family);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  color: #ffffff;
+  background: var(--btn-blue);
+  box-shadow: none;
+  outline: none;
+}
+
+button:hover, .clean-btn:hover {
+  background: var(--btn-blue-hover);
+}
+
+.btn-primary { background: var(--btn-blue); color: #ffffff; }
+.btn-primary:hover { background: var(--btn-blue-hover); }
+
+.btn-gold { background: var(--btn-gold); color: #000000; }
+.btn-gold:hover { background: var(--btn-gold-hover); }
+
+.btn-red { background: var(--btn-red); color: #ffffff; }
+.btn-red:hover { background: var(--btn-red-hover); }
+
+.btn-sub { background: var(--btn-sub); color: var(--text-main); border: 1px solid var(--border-color); }
+.btn-sub:hover { background: var(--btn-sub-hover); }
+
+button:disabled, .clean-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+/* Avatar Badge */
+.user-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Badges */
+.badge-chip {
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.badge-host {
+  background: rgba(245, 158, 11, 0.2);
+  color: var(--btn-gold);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.badge-ready {
+  background: rgba(16, 185, 129, 0.2);
+  color: var(--color-success);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+.badge-waiting {
+  background: rgba(239, 68, 68, 0.2);
+  color: var(--color-error);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+/* Timer Bar */
+.timer-bar-wrapper {
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+  margin: 14px 0;
+}
+
+.timer-bar-fill {
+  height: 100%;
+  background: var(--btn-blue);
+  width: 100%;
+  transition: width 0.1s linear, background-color 0.2s ease;
+}
+
+.timer-bar-fill.warning {
+  background: var(--color-error);
+}
+
+/* Quiz Card */
+.quiz-question-box {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-card);
+  padding: 32px 20px;
+  text-align: center;
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.6;
+  color: #ffffff;
+  min-height: 160px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+/* Bottom Input Bar */
+.bottom-input-bar {
+  margin-top: auto;
+  padding: 16px 20px;
+  background: var(--bg-color);
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  gap: 10px;
+}
+
+/* Overlay Modal */
+.overlay-backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 100;
+}
+
+.overlay-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-card);
+  width: 100%;
+  padding: 24px;
+}
+
+/* Podium Stand */
+.podium-container {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 14px;
+  height: 240px;
+  margin: 20px 0 28px 0;
+}
+
+.podium-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  height: 100%;
+  justify-content: flex-end;
+}
+
+.podium-user-name {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #ffffff !important;
+  margin-bottom: 2px;
+  text-align: center;
+}
+
+.podium-user-score {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-sub) !important;
+  margin-bottom: 8px;
+}
+
+.podium-box {
+  width: 100%;
+  border-radius: 12px 12px 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  font-size: 1.5rem;
+  color: #ffffff !important;
+}
+
+.podium-slot.rank-1 .podium-box {
+  height: 140px;
+  background: linear-gradient(180deg, #f59e0b, #d97706);
+  color: #000000 !important;
+}
+
+.podium-slot.rank-2 .podium-box {
+  height: 100px;
+  background: linear-gradient(180deg, #94a3b8, #475569);
+  color: #ffffff !important;
+}
+
+.podium-slot.rank-3 .podium-box {
+  height: 70px;
+  background: linear-gradient(180deg, #b45309, #78350f);
+  color: #ffffff !important;
+}
