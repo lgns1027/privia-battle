@@ -1,29 +1,36 @@
 import { broadcastMessage, getMyPlayerId } from './broadcast.js';
 
-const ROOMS_KEY = "TRIVIA_BATTLE_ROOMS_STORE_V5";
+/**
+ * 100% Pure In-Memory Global Room Store (Zero LocalStorage)
+ * - 브라우저의 LocalStorage를 완전히 제거하고 pure JS in-memory state로 전환합니다.
+ * - 방 목록과 상태는 전 세계 WebSocket 네트워크 패킷을 통해서만 실시간 공유됩니다.
+ */
+
+// 메모리 전역 방 객체 (Key: roomId, Value: RoomObject)
+const inMemoryRooms = new Map();
 
 export function getRooms() {
-  try {
-    const data = localStorage.getItem(ROOMS_KEY);
-    if (!data) return [];
-    const rooms = JSON.parse(data);
-    
-    const validRooms = rooms.filter(r => r && Array.isArray(r.players) && r.players.length > 0);
-    if (validRooms.length !== rooms.length) {
-      saveRooms(validRooms);
-    }
-    return validRooms;
-  } catch (e) {
-    return [];
+  return Array.from(inMemoryRooms.values()).filter(r => r && Array.isArray(r.players) && r.players.length > 0);
+}
+
+export function setMemoryRooms(roomsArray) {
+  inMemoryRooms.clear();
+  if (Array.isArray(roomsArray)) {
+    roomsArray.forEach(r => {
+      if (r && r.id && Array.isArray(r.players) && r.players.length > 0) {
+        inMemoryRooms.set(r.id, r);
+      }
+    });
   }
 }
 
-export function saveRooms(rooms) {
-  try {
-    const cleanRooms = rooms.filter(r => r && Array.isArray(r.players) && r.players.length > 0);
-    localStorage.setItem(ROOMS_KEY, JSON.stringify(cleanRooms));
-  } catch (e) {
-    console.error("Failed to save rooms", e);
+export function updateSingleMemoryRoom(room) {
+  if (room && room.id) {
+    if (!room.players || room.players.length === 0) {
+      inMemoryRooms.delete(room.id);
+    } else {
+      inMemoryRooms.set(room.id, room);
+    }
   }
 }
 
@@ -39,11 +46,12 @@ export function resetRoomScores(room) {
 }
 
 export function createRoom({ title, category, maxPlayers, hostNickname, hostAvatar }) {
-  const rooms = getRooms();
   const myId = getMyPlayerId();
 
-  rooms.forEach(r => {
+  // 기존 내 방 제거
+  inMemoryRooms.forEach((r, id) => {
     r.players = r.players.filter(p => p.id !== myId);
+    if (r.players.length === 0) inMemoryRooms.delete(id);
   });
 
   const newRoom = {
@@ -70,20 +78,16 @@ export function createRoom({ title, category, maxPlayers, hostNickname, hostAvat
     roundSubmissions: {}
   };
 
-  const updatedRooms = [...rooms.filter(r => r.players.length > 0), newRoom];
-  saveRooms(updatedRooms);
+  inMemoryRooms.set(newRoom.id, newRoom);
   
-  // 전 세계 인터넷망으로 즉시 브로드캐스트 전송
-  broadcastMessage("ROOM_LIST_UPDATE", { rooms: updatedRooms });
+  // 전 세계 인터넷 WebSocket 망으로 인메모리 방 목록 즉시 브로드캐스트
+  broadcastMessage("ROOM_LIST_UPDATE", { rooms: getRooms() });
   return newRoom;
 }
 
 export function joinRoom(roomId, playerInfo) {
-  const rooms = getRooms();
-  const roomIndex = rooms.findIndex(r => r.id === roomId);
-  if (roomIndex === -1) return null;
-
-  const room = rooms[roomIndex];
+  const room = inMemoryRooms.get(roomId);
+  if (!room) return null;
 
   const existingPlayer = room.players.find(p => p.id === playerInfo.id);
   if (!existingPlayer) {
@@ -102,48 +106,33 @@ export function joinRoom(roomId, playerInfo) {
     });
   }
 
-  saveRooms(rooms);
+  inMemoryRooms.set(room.id, room);
   broadcastMessage("ROOM_STATE_UPDATE", { room });
-  broadcastMessage("ROOM_LIST_UPDATE", { rooms });
+  broadcastMessage("ROOM_LIST_UPDATE", { rooms: getRooms() });
   return room;
 }
 
-export function updateRoomCategory(roomId, category) {
-  const rooms = getRooms();
-  const room = rooms.find(r => r.id === roomId);
-  if (!room) return;
-
-  room.category = category;
-  saveRooms(rooms);
-  broadcastMessage("ROOM_STATE_UPDATE", { room });
-  broadcastMessage("ROOM_LIST_UPDATE", { rooms });
-}
-
 export function toggleReady(roomId, playerId) {
-  const rooms = getRooms();
-  const room = rooms.find(r => r.id === roomId);
+  const room = inMemoryRooms.get(roomId);
   if (!room) return;
 
   const player = room.players.find(p => p.id === playerId);
   if (player && !player.isHost) {
     player.isReady = !player.isReady;
-    saveRooms(rooms);
+    inMemoryRooms.set(room.id, room);
     broadcastMessage("ROOM_STATE_UPDATE", { room });
   }
 }
 
 export function leaveRoom(roomId, playerId) {
-  const rooms = getRooms();
-  const roomIndex = rooms.findIndex(r => r.id === roomId);
-  if (roomIndex === -1) return;
+  const room = inMemoryRooms.get(roomId);
+  if (!room) return;
 
-  const room = rooms[roomIndex];
   const isHostLeaving = (room.hostId === playerId);
-  
   room.players = room.players.filter(p => p.id !== playerId);
 
   if (room.players.length === 0) {
-    rooms.splice(roomIndex, 1);
+    inMemoryRooms.delete(roomId);
   } else {
     if (isHostLeaving) {
       room.players[0].isHost = true;
@@ -151,18 +140,17 @@ export function leaveRoom(roomId, playerId) {
       room.hostId = room.players[0].id;
       broadcastMessage("ROOM_DISBANDED", { roomId });
     }
+    inMemoryRooms.set(roomId, room);
   }
 
-  saveRooms(rooms);
   broadcastMessage("ROOM_STATE_UPDATE", { room });
-  broadcastMessage("ROOM_LIST_UPDATE", { rooms });
+  broadcastMessage("ROOM_LIST_UPDATE", { rooms: getRooms() });
 }
 
 if (typeof window !== "undefined") {
   const autoCleanup = () => {
     const myId = getMyPlayerId();
-    const rooms = getRooms();
-    rooms.forEach(r => {
+    inMemoryRooms.forEach(r => {
       if (r.players.some(p => p.id === myId)) {
         leaveRoom(r.id, myId);
       }

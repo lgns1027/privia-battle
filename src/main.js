@@ -1,6 +1,15 @@
 import './style.css';
 import { initBroadcast, broadcastMessage, getMyPlayerId } from './engine/broadcast.js';
-import { getRooms, saveRooms, createRoom, joinRoom, toggleReady, leaveRoom, resetRoomScores } from './engine/roomManager.js';
+import { 
+  getRooms, 
+  setMemoryRooms, 
+  updateSingleMemoryRoom, 
+  createRoom, 
+  joinRoom, 
+  toggleReady, 
+  leaveRoom, 
+  resetRoomScores 
+} from './engine/roomManager.js';
 import { generateQuizSet, evaluateAnswer } from './engine/quizEngine.js';
 
 import { renderLobbyView } from './components/LobbyView.js';
@@ -13,7 +22,6 @@ let currentView = 'LOBBY';
 let myProfile = JSON.parse(sessionStorage.getItem('trivia_profile') || 'null');
 
 let currentRoomId = null;
-let roomsList = getRooms();
 let currentRoom = null;
 
 // Quiz State
@@ -34,10 +42,14 @@ function init() {
   render();
 }
 
+function isHost() {
+  return currentRoom && currentRoom.hostId === getMyPlayerId();
+}
+
 function render() {
+  const roomsList = getRooms();
   if (currentRoomId) {
-    const freshRooms = getRooms();
-    const found = freshRooms.find(r => r.id === currentRoomId);
+    const found = roomsList.find(r => r.id === currentRoomId);
     if (found) {
       currentRoom = found;
     }
@@ -91,6 +103,7 @@ function render() {
         render();
       },
       onStartGame: () => {
+        if (!isHost()) return;
         resetRoomScores(currentRoom);
 
         const quizSet = generateQuizSet(currentRoom.category);
@@ -102,14 +115,7 @@ function render() {
         currentRoom.roundStartTime = masterStartTime;
         currentRoom.roundSubmissions = {};
         
-        const fresh = getRooms();
-        const roomIdx = fresh.findIndex(r => r.id === currentRoom.id);
-        if (roomIdx !== -1) {
-          fresh[roomIdx] = currentRoom;
-        } else {
-          fresh.push(currentRoom);
-        }
-        saveRooms(fresh);
+        updateSingleMemoryRoom(currentRoom);
 
         broadcastMessage("GAME_STARTED", { 
           roomId: currentRoom.id, 
@@ -209,7 +215,10 @@ function startQuizRound(qIndex, masterStartTime) {
       quizTimer = null;
       timeLeft = 0;
       updateDynamicTimerUI();
-      finishCurrentQuestionRound();
+      // 시간 만료 시 방장(Host)이 라운드 마감 주도
+      if (isHost()) {
+        hostFinishCurrentQuestionRound();
+      }
     } else {
       updateDynamicTimerUI();
     }
@@ -246,53 +255,65 @@ function handleAnswerSubmit(answerText) {
   const currentQuiz = currentRoom.currentQuizSet[currentQuestionIndex];
   const evalResult = evaluateAnswer(currentQuiz, answerText);
 
-  const freshRooms = getRooms();
-  const room = freshRooms.find(r => r.id === currentRoom.id);
-  if (room) {
-    if (!room.roundSubmissions) room.roundSubmissions = {};
-    if (!room.roundSubmissions[currentQuestionIndex]) {
-      room.roundSubmissions[currentQuestionIndex] = {};
+  const submissionPayload = {
+    playerId: getMyPlayerId(),
+    nickname: myProfile.nickname,
+    avatar: myProfile.avatar,
+    answer: answerText,
+    isCorrect: evalResult.isCorrect,
+    score: evalResult.score,
+    timeTaken
+  };
+
+  // 내 인메모리에 제출 저장
+  if (currentRoom) {
+    if (!currentRoom.roundSubmissions) currentRoom.roundSubmissions = {};
+    if (!currentRoom.roundSubmissions[currentQuestionIndex]) {
+      currentRoom.roundSubmissions[currentQuestionIndex] = {};
     }
+    currentRoom.roundSubmissions[currentQuestionIndex][getMyPlayerId()] = submissionPayload;
+    updateSingleMemoryRoom(currentRoom);
+  }
 
-    room.roundSubmissions[currentQuestionIndex][getMyPlayerId()] = {
-      playerId: getMyPlayerId(),
-      nickname: myProfile.nickname,
-      avatar: myProfile.avatar,
-      answer: answerText,
-      isCorrect: evalResult.isCorrect,
-      score: evalResult.score,
-      timeTaken
-    };
+  // 제출 패킷을 전 세계 네트워크로 전송
+  broadcastMessage("SUBMITTED_ANSWER", { 
+    roomId: currentRoom.id, 
+    qIndex: currentQuestionIndex,
+    submission: submissionPayload
+  });
 
-    saveRooms(freshRooms);
-    broadcastMessage("SUBMITTED_ANSWER", { 
-      roomId: room.id, 
-      qIndex: currentQuestionIndex,
-      submission: room.roundSubmissions[currentQuestionIndex][getMyPlayerId()]
-    });
-
-    const subCount = Object.keys(room.roundSubmissions[currentQuestionIndex]).length;
-    if (subCount >= room.players.length) {
-      if (quizTimer) {
-        clearInterval(quizTimer);
-        quizTimer = null;
-      }
-      finishCurrentQuestionRound();
-    }
+  // 방장일 경우 제출 상태 자동 검사 및 라운드 마감 트리거
+  if (isHost()) {
+    checkHostRoundCompletion();
   }
 
   render();
 }
 
-function finishCurrentQuestionRound() {
-  const freshRooms = getRooms();
-  const room = freshRooms.find(r => r.id === currentRoom.id);
-  if (!room) return;
+function checkHostRoundCompletion() {
+  if (!isHost() || !currentRoom) return;
 
-  const currentQuiz = room.currentQuizSet[currentQuestionIndex];
-  const roundSubs = (room.roundSubmissions && room.roundSubmissions[currentQuestionIndex]) || {};
+  const roundSubs = (currentRoom.roundSubmissions && currentRoom.roundSubmissions[currentQuestionIndex]) || {};
+  const subCount = Object.keys(roundSubs).length;
 
-  const playerResults = room.players.map(p => {
+  // 모든 인원이 제출 완료한 경우 방장이 즉시 라운드 마감 계산 후 전 세계 브로드캐스트
+  if (subCount >= currentRoom.players.length) {
+    if (quizTimer) {
+      clearInterval(quizTimer);
+      quizTimer = null;
+    }
+    hostFinishCurrentQuestionRound();
+  }
+}
+
+// 방장(Authoritative Host) 전용 라운드 마감 및 점수 계산 로직
+function hostFinishCurrentQuestionRound() {
+  if (!isHost() || !currentRoom) return;
+
+  const currentQuiz = currentRoom.currentQuizSet[currentQuestionIndex];
+  const roundSubs = (currentRoom.roundSubmissions && currentRoom.roundSubmissions[currentQuestionIndex]) || {};
+
+  const playerResults = currentRoom.players.map(p => {
     const sub = roundSubs[p.id];
     let isCorrect = false;
     let earnedScore = 0;
@@ -320,75 +341,85 @@ function finishCurrentQuestionRound() {
     };
   });
 
-  saveRooms(freshRooms);
+  updateSingleMemoryRoom(currentRoom);
 
-  roundResultOverlay = {
+  const resultPayload = {
     questionIndex: currentQuestionIndex,
     correctAnswerText: currentQuiz.answers[0],
-    players: playerResults
+    players: playerResults,
+    updatedRoom: currentRoom
   };
+
+  // 방장이 라운드 결과 패킷을 전 세계 참가자에게 동시 분사
+  broadcastMessage("ROUND_RESULT_BROADCAST", {
+    roomId: currentRoom.id,
+    result: resultPayload
+  });
+
+  processRoundResult(resultPayload);
+}
+
+function processRoundResult(resultPayload) {
+  if (quizTimer) {
+    clearInterval(quizTimer);
+    quizTimer = null;
+  }
+
+  roundResultOverlay = {
+    questionIndex: resultPayload.questionIndex,
+    correctAnswerText: resultPayload.correctAnswerText,
+    players: resultPayload.players
+  };
+
+  if (resultPayload.updatedRoom) {
+    currentRoom = resultPayload.updatedRoom;
+    updateSingleMemoryRoom(currentRoom);
+  }
 
   render();
 
   if (roundTimeoutTimer) clearTimeout(roundTimeoutTimer);
 
+  // 3.5초 결과 확인 후 방장의 지시에 따라 다음 라운드로 이동
   roundTimeoutTimer = setTimeout(() => {
     roundResultOverlay = null;
-    if (currentQuestionIndex + 1 < room.currentQuizSet.length) {
-      const isHost = (room.hostId === getMyPlayerId());
-      const nextStartTime = Date.now();
+    if (isHost()) {
+      if (currentQuestionIndex + 1 < currentRoom.currentQuizSet.length) {
+        const nextStartTime = Date.now();
+        currentRoom.roundStartTime = nextStartTime;
+        updateSingleMemoryRoom(currentRoom);
 
-      room.roundStartTime = nextStartTime;
-      saveRooms(getRooms().map(r => r.id === room.id ? room : r));
-
-      if (isHost) {
-        broadcastMessage("NEXT_ROUND_START", { roomId: room.id, qIndex: currentQuestionIndex + 1, startTime: nextStartTime });
+        broadcastMessage("NEXT_ROUND_START", { 
+          roomId: currentRoom.id, 
+          qIndex: currentQuestionIndex + 1, 
+          startTime: nextStartTime 
+        });
         startQuizRound(currentQuestionIndex + 1, nextStartTime);
+      } else {
+        broadcastMessage("GAME_OVER_BROADCAST", { roomId: currentRoom.id });
+        currentView = 'RESULT';
+        render();
       }
-    } else {
-      currentView = 'RESULT';
-      render();
     }
   }, 3500);
 }
 
-// 인터넷 전역 망 브로드캐스트 핸들러
+// 인터넷 전역 망 브로드캐스트 핸들러 (Authoritative Host Event Listener)
 function handleBroadcastMessage(msg) {
   if (msg.type === "REQ_ROOM_LIST") {
-    // 인터넷 신규 접속자가 방 목록 요청 시 내 인터넷 방 목록을 응답
-    const currentActiveRooms = getRooms();
-    if (currentActiveRooms && currentActiveRooms.length > 0) {
-      broadcastMessage("ROOM_LIST_UPDATE", { rooms: currentActiveRooms });
+    const activeRooms = getRooms();
+    if (activeRooms && activeRooms.length > 0) {
+      broadcastMessage("ROOM_LIST_UPDATE", { rooms: activeRooms });
     }
   }
   else if (msg.type === "ROOM_LIST_UPDATE") {
     const receivedRooms = msg.payload.rooms || [];
-    const myRooms = getRooms();
-    
-    // 내 로컬 스토리지에 인터넷 수신 방 목록 병합 저장
-    receivedRooms.forEach(rr => {
-      const idx = myRooms.findIndex(mr => mr.id === rr.id);
-      if (idx !== -1) {
-        myRooms[idx] = rr;
-      } else {
-        myRooms.push(rr);
-      }
-    });
-
-    const validRooms = myRooms.filter(r => r && Array.isArray(r.players) && r.players.length > 0);
-    saveRooms(validRooms);
-
-    roomsList = validRooms;
+    setMemoryRooms(receivedRooms);
     if (currentView === 'LOBBY') render();
   } 
   else if (msg.type === "ROOM_STATE_UPDATE") {
     if (msg.payload.room) {
-      const fresh = getRooms();
-      const idx = fresh.findIndex(r => r.id === msg.payload.room.id);
-      if (idx !== -1) fresh[idx] = msg.payload.room;
-      else fresh.push(msg.payload.room);
-      saveRooms(fresh);
-
+      updateSingleMemoryRoom(msg.payload.room);
       if (currentRoomId && msg.payload.room.id === currentRoomId) {
         currentRoom = msg.payload.room;
         if (currentView === 'WAITING_ROOM') render();
@@ -399,6 +430,7 @@ function handleBroadcastMessage(msg) {
     if (currentRoomId && msg.payload.roomId === currentRoomId) {
       if (msg.payload.room) {
         currentRoom = msg.payload.room;
+        updateSingleMemoryRoom(currentRoom);
       }
       if (msg.payload.quizSet) {
         currentRoom.currentQuizSet = msg.payload.quizSet;
@@ -408,19 +440,42 @@ function handleBroadcastMessage(msg) {
       startQuizRound(0, currentRoom.roundStartTime);
     }
   }
+  else if (msg.type === "SUBMITTED_ANSWER") {
+    if (currentRoomId && msg.payload.roomId === currentRoomId) {
+      if (currentRoom && msg.payload.submission) {
+        if (!currentRoom.roundSubmissions) currentRoom.roundSubmissions = {};
+        if (!currentRoom.roundSubmissions[msg.payload.qIndex]) {
+          currentRoom.roundSubmissions[msg.payload.qIndex] = {};
+        }
+        currentRoom.roundSubmissions[msg.payload.qIndex][msg.payload.submission.playerId] = msg.payload.submission;
+        updateSingleMemoryRoom(currentRoom);
+      }
+
+      // 핵심 교정: 방장(Host)이 타 유저의 제출 패킷을 수신했을 때 라운드 마감 조건 즉시 검사!
+      if (isHost()) {
+        checkHostRoundCompletion();
+      }
+
+      if (currentView === 'QUIZ_ARENA') render();
+    }
+  }
+  else if (msg.type === "ROUND_RESULT_BROADCAST") {
+    if (currentRoomId && msg.payload.roomId === currentRoomId) {
+      // 방장이 전송한 최신 라운드 결과 패킷 수신 및 결과 화면 즉시 동기화
+      processRoundResult(msg.payload.result);
+    }
+  }
   else if (msg.type === "NEXT_ROUND_START") {
     if (currentRoomId && msg.payload.roomId === currentRoomId) {
-      const isHost = (currentRoom && currentRoom.hostId === getMyPlayerId());
-      if (!isHost) {
+      if (!isHost()) {
         startQuizRound(msg.payload.qIndex, msg.payload.startTime);
       }
     }
   }
-  else if (msg.type === "SUBMITTED_ANSWER") {
+  else if (msg.type === "GAME_OVER_BROADCAST") {
     if (currentRoomId && msg.payload.roomId === currentRoomId) {
-      const freshRooms = getRooms();
-      currentRoom = freshRooms.find(r => r.id === currentRoomId) || currentRoom;
-      if (currentView === 'QUIZ_ARENA') render();
+      currentView = 'RESULT';
+      render();
     }
   }
   else if (msg.type === "ROOM_DISBANDED") {
