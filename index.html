@@ -745,10 +745,30 @@ function onMqttMsg(msg, topic) {
   if(topic!==roomTopic) return;
 
   if(type==="ROOM_STATE_UPDATE"){
-    if(p.room&&p.room.hostId!==MY_ID){
-      upsertRoom(p.room);curRoom=rooms.get(curRoomId)||p.room;
-      if(appState==="WAITING") render();
+    if(!p.room) return;
+    var incoming=p.room;
+    var local=rooms.get(curRoomId);
+    if(local && local.hostId===MY_ID){
+      // 나는 방장: 참가자 목록만 머지 (새 플레이어 추가 + ready 상태 갱신)
+      var existingIds=new Set(local.players.map(function(x){return x.id;}));
+      incoming.players.forEach(function(np){
+        if(!existingIds.has(np.id)) local.players.push(np);
+        else {
+          var ep=local.players.find(function(x){return x.id===np.id;});
+          if(ep){ ep.isReady=np.isReady; ep.score=np.score||ep.score; }
+        }
+      });
+      // 나간 플레이어 제거
+      var incomingIds=new Set(incoming.players.map(function(x){return x.id;}));
+      local.players=local.players.filter(function(x){return incomingIds.has(x.id)||x.id===MY_ID;});
+      rooms.set(curRoomId,local);
+      curRoom=local;
+    } else {
+      // 나는 참가자: 받은 상태 그대로 적용
+      upsertRoom(incoming);
+      curRoom=rooms.get(curRoomId)||incoming;
     }
+    if(appState==="WAITING") render();
   }
   else if(type==="HOST_CHANGED"){
     if(p.newHostId===MY_ID&&curRoom){curRoom.hostId=MY_ID;publishRoomList();}
