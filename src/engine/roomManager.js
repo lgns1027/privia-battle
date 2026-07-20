@@ -1,6 +1,6 @@
 import { broadcastMessage, getMyPlayerId } from './broadcast.js';
 
-const ROOMS_KEY = "TRIVIA_BATTLE_ROOMS_STORE_V4";
+const ROOMS_KEY = "TRIVIA_BATTLE_ROOMS_STORE_V5";
 
 export function getRooms() {
   try {
@@ -8,7 +8,6 @@ export function getRooms() {
     if (!data) return [];
     const rooms = JSON.parse(data);
     
-    // 인원 0명인 유령 방 자동 100% 필터링 청소
     const validRooms = rooms.filter(r => r && Array.isArray(r.players) && r.players.length > 0);
     if (validRooms.length !== rooms.length) {
       saveRooms(validRooms);
@@ -28,7 +27,6 @@ export function saveRooms(rooms) {
   }
 }
 
-// [결함 ① 해결]: 게임 시작 전 모든 참가자의 점수와 제출 내역을 100% 명시적으로 0점 초기화
 export function resetRoomScores(room) {
   if (!room || !Array.isArray(room.players)) return;
   
@@ -44,7 +42,6 @@ export function createRoom({ title, category, maxPlayers, hostNickname, hostAvat
   const rooms = getRooms();
   const myId = getMyPlayerId();
 
-  // 기존 유저가 이전 방에 남아있던 흔적 지우기
   rooms.forEach(r => {
     r.players = r.players.filter(p => p.id !== myId);
   });
@@ -75,6 +72,8 @@ export function createRoom({ title, category, maxPlayers, hostNickname, hostAvat
 
   const updatedRooms = [...rooms.filter(r => r.players.length > 0), newRoom];
   saveRooms(updatedRooms);
+  
+  // 전 세계 인터넷망으로 즉시 브로드캐스트 전송
   broadcastMessage("ROOM_LIST_UPDATE", { rooms: updatedRooms });
   return newRoom;
 }
@@ -109,7 +108,6 @@ export function joinRoom(roomId, playerInfo) {
   return room;
 }
 
-// [결함 ⑥ 해결]: 대기실 카테고리 변경 시 참가자 뷰 즉시 동기화
 export function updateRoomCategory(roomId, category) {
   const rooms = getRooms();
   const room = rooms.find(r => r.id === roomId);
@@ -134,7 +132,6 @@ export function toggleReady(roomId, playerId) {
   }
 }
 
-// [결함 ②, ⑦ 해결]: 방 퇴장 및 브라우저 종료 시 인원 0명 방 즉시 파기 및 방 해산 알림
 export function leaveRoom(roomId, playerId) {
   const rooms = getRooms();
   const roomIndex = rooms.findIndex(r => r.id === roomId);
@@ -152,7 +149,6 @@ export function leaveRoom(roomId, playerId) {
       room.players[0].isHost = true;
       room.players[0].isReady = true;
       room.hostId = room.players[0].id;
-      // 방장이 나간 경우 참가자들에게 알림
       broadcastMessage("ROOM_DISBANDED", { roomId });
     }
   }
@@ -162,7 +158,6 @@ export function leaveRoom(roomId, playerId) {
   broadcastMessage("ROOM_LIST_UPDATE", { rooms });
 }
 
-// [결함 ② 해결]: 브라우저 탭 닫기/뒤로가기 시 자동 이탈 훅 등록
 if (typeof window !== "undefined") {
   const autoCleanup = () => {
     const myId = getMyPlayerId();

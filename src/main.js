@@ -16,7 +16,7 @@ let currentRoomId = null;
 let roomsList = getRooms();
 let currentRoom = null;
 
-// Quiz State (원자적 이중 실행 방지용 타이머 참조)
+// Quiz State
 let quizTimer = null;
 let roundTimeoutTimer = null;
 let timeLeft = 15;
@@ -91,7 +91,6 @@ function render() {
         render();
       },
       onStartGame: () => {
-        // 게임 시작 전 0점 명시적 초기화
         resetRoomScores(currentRoom);
 
         const quizSet = generateQuizSet(currentRoom.category);
@@ -112,7 +111,6 @@ function render() {
         }
         saveRooms(fresh);
 
-        // 메세지에 퀴즈 세트 직접 전달 (방장을 제외한 인원이 튕기는 버그 100% 원천 해결)
         broadcastMessage("GAME_STARTED", { 
           roomId: currentRoom.id, 
           room: currentRoom,
@@ -164,7 +162,6 @@ function render() {
     });
     appEl.appendChild(view);
   } else {
-    // 튕김 방지 가드: 대기실/게임중 상태이면 안전하게 WAITING_ROOM 세션 유지
     if (currentRoom) {
       currentView = (currentRoom.status === 'playing') ? 'QUIZ_ARENA' : 'WAITING_ROOM';
       render();
@@ -175,9 +172,7 @@ function render() {
   }
 }
 
-// --- 퀴즈 라운드 제어 (타이머 중복 실행 100% 원천 차단) ---
 function startQuizRound(qIndex, masterStartTime) {
-  // 이전 타이머와 라운드 대기 타이머를 모두 명확히 파기 (문제가 휙휙 넘어가는 현상 100% 차단)
   if (quizTimer) {
     clearInterval(quizTimer);
     quizTimer = null;
@@ -335,7 +330,6 @@ function finishCurrentQuestionRound() {
 
   render();
 
-  // 이전 라운드 대기 타이머가 있다면 파기
   if (roundTimeoutTimer) clearTimeout(roundTimeoutTimer);
 
   roundTimeoutTimer = setTimeout(() => {
@@ -347,7 +341,6 @@ function finishCurrentQuestionRound() {
       room.roundStartTime = nextStartTime;
       saveRooms(getRooms().map(r => r.id === room.id ? room : r));
 
-      // 오직 방장(Host)만 라운드 진행 이벤트를 주도하여 이중 이노케이션 차단
       if (isHost) {
         broadcastMessage("NEXT_ROUND_START", { roomId: room.id, qIndex: currentQuestionIndex + 1, startTime: nextStartTime });
         startQuizRound(currentQuestionIndex + 1, nextStartTime);
@@ -359,16 +352,47 @@ function finishCurrentQuestionRound() {
   }, 3500);
 }
 
-// Broadcast Message Handler - 방장 외 튕김 버그 & 이중 라운드 이동 100% 원천 차단
+// 인터넷 전역 망 브로드캐스트 핸들러
 function handleBroadcastMessage(msg) {
-  if (msg.type === "ROOM_LIST_UPDATE") {
-    roomsList = msg.payload.rooms || [];
+  if (msg.type === "REQ_ROOM_LIST") {
+    // 인터넷 신규 접속자가 방 목록 요청 시 내 인터넷 방 목록을 응답
+    const currentActiveRooms = getRooms();
+    if (currentActiveRooms && currentActiveRooms.length > 0) {
+      broadcastMessage("ROOM_LIST_UPDATE", { rooms: currentActiveRooms });
+    }
+  }
+  else if (msg.type === "ROOM_LIST_UPDATE") {
+    const receivedRooms = msg.payload.rooms || [];
+    const myRooms = getRooms();
+    
+    // 내 로컬 스토리지에 인터넷 수신 방 목록 병합 저장
+    receivedRooms.forEach(rr => {
+      const idx = myRooms.findIndex(mr => mr.id === rr.id);
+      if (idx !== -1) {
+        myRooms[idx] = rr;
+      } else {
+        myRooms.push(rr);
+      }
+    });
+
+    const validRooms = myRooms.filter(r => r && Array.isArray(r.players) && r.players.length > 0);
+    saveRooms(validRooms);
+
+    roomsList = validRooms;
     if (currentView === 'LOBBY') render();
   } 
   else if (msg.type === "ROOM_STATE_UPDATE") {
-    if (currentRoomId && msg.payload.room && msg.payload.room.id === currentRoomId) {
-      currentRoom = msg.payload.room;
-      if (currentView === 'WAITING_ROOM') render();
+    if (msg.payload.room) {
+      const fresh = getRooms();
+      const idx = fresh.findIndex(r => r.id === msg.payload.room.id);
+      if (idx !== -1) fresh[idx] = msg.payload.room;
+      else fresh.push(msg.payload.room);
+      saveRooms(fresh);
+
+      if (currentRoomId && msg.payload.room.id === currentRoomId) {
+        currentRoom = msg.payload.room;
+        if (currentView === 'WAITING_ROOM') render();
+      }
     }
   }
   else if (msg.type === "GAME_STARTED") {
@@ -381,14 +405,12 @@ function handleBroadcastMessage(msg) {
       }
       currentRoom.roundStartTime = msg.payload.startTime || Date.now();
       
-      // 방장을 포함한 모든 참가자 안전 시작
       startQuizRound(0, currentRoom.roundStartTime);
     }
   }
   else if (msg.type === "NEXT_ROUND_START") {
     if (currentRoomId && msg.payload.roomId === currentRoomId) {
       const isHost = (currentRoom && currentRoom.hostId === getMyPlayerId());
-      // 참가자(Client)만 방장의 라운드 신호를 받아 이동 (이중 실행 100% 차단)
       if (!isHost) {
         startQuizRound(msg.payload.qIndex, msg.payload.startTime);
       }
