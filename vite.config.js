@@ -7,9 +7,12 @@ export default defineConfig({
     target: 'es2015',
     cssCodeSplit: false,
     assetsInlineLimit: 100000000,
-  },
-  server: {
-    port: 3000,
-    open: true
+    modulePreload: false,
+    rollupOptions: {
+      output: {
+        format: 'iife',
+        name: 'TriviaApp'
+      }
+    }
   }
 });
